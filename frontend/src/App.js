@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
+import CourseDetails from "./pages/CourseDetails";
 import Courses from "./pages/Courses";
 import Login from "./pages/Login";
 
@@ -22,6 +23,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Courses />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/courses/:id"
+          element={
+            <ProtectedRoute>
+              <CourseDetails />
             </ProtectedRoute>
           }
         />
