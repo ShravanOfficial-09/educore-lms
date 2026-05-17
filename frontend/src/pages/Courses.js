@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Navbar from "../components/Navbar";
 import { getCourses } from "../services/api";
 
 function Courses() {
@@ -10,10 +11,7 @@ function Courses() {
         const response = await getCourses();
 
         console.log(response);
-
-        // API RESPONSE -> response.data
         setCourses(response.data);
-
       } catch (error) {
         console.log(error);
         alert("Failed to fetch courses");
@@ -25,15 +23,21 @@ function Courses() {
 
   return (
     <div>
-      <h2>Courses</h2>
+      <Navbar />
 
-      <ul>
-        {courses.map((course) => (
-          <li key={course.id}>
-            {course.title}
-          </li>
-        ))}
-      </ul>
+      <div style={{ padding: "20px" }}>
+        <h2>Courses</h2>
+
+        {courses.length === 0 ? (
+          <p>No courses available.</p>
+        ) : (
+          <ul>
+            {courses.map((course) => (
+              <li key={course.id}>{course.title}</li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
