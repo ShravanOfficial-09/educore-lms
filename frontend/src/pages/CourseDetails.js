@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import {
   createLecture,
   getLecturesByCourse,
 } from "../services/api";
+import { isAdmin } from "../utils/auth";
 
 function CourseDetails() {
 
@@ -13,10 +14,10 @@ function CourseDetails() {
   const navigate = useNavigate();
 
   const [lectures, setLectures] = useState([]);
-
   const [lectureTitle, setLectureTitle] = useState("");
-
   const [videoUrl, setVideoUrl] = useState("");
+
+  const adminUser = useMemo(() => isAdmin(), []);
 
   const fetchLectures = async () => {
 
@@ -44,13 +45,11 @@ function CourseDetails() {
 
   const handleCreateLecture = async () => {
 
-    // VALIDATION
     if (!lectureTitle || !videoUrl) {
       alert("Please fill all fields");
       return;
     }
 
-    // SIMPLE URL VALIDATION
     if (
       !videoUrl.startsWith("http://")
       && !videoUrl.startsWith("https://")
@@ -70,11 +69,9 @@ function CourseDetails() {
 
       alert("Lecture created successfully");
 
-      // CLEAR FORM
       setLectureTitle("");
       setVideoUrl("");
 
-      // REFRESH LECTURES
       fetchLectures();
 
     } catch (error) {
@@ -92,7 +89,6 @@ function CourseDetails() {
 
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
 
-        {/* BACK BUTTON */}
         <button
           type="button"
           onClick={() => navigate("/courses")}
@@ -115,7 +111,7 @@ function CourseDetails() {
             </h1>
 
             <p className="mt-3 max-w-2xl text-sm leading-6 text-sky-50 sm:text-base">
-              Manage lectures for this course and keep your learning content
+              View lectures for this course and keep your learning content
               organized in one place.
             </p>
 
@@ -126,7 +122,6 @@ function CourseDetails() {
             {/* LEFT SIDE */}
             <div className="space-y-6">
 
-              {/* OVERVIEW */}
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
 
                 <h2 className="text-lg font-semibold text-slate-900">
@@ -213,73 +208,107 @@ function CourseDetails() {
             {/* RIGHT SIDE */}
             <aside className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
 
-              <h2 className="text-lg font-semibold text-slate-900">
-                Create Lecture
-              </h2>
+              {adminUser ? (
 
-              <p className="mt-2 text-sm text-slate-500">
-                Add new lectures and video resources for this course.
-              </p>
+                <>
 
-              <div className="mt-6 space-y-4">
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    Create Lecture
+                  </h2>
 
-                {/* TITLE */}
-                <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Lecture Title
-                  </label>
-
-                  <input
-                    type="text"
-                    placeholder="Enter lecture title"
-                    value={lectureTitle}
-                    onChange={(e) => setLectureTitle(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                  />
-
-                </div>
-
-                {/* VIDEO URL */}
-                <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Video URL
-                  </label>
-
-                  <input
-                    type="text"
-                    placeholder="https://youtube.com/..."
-                    value={videoUrl}
-                    onChange={(e) => setVideoUrl(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                  />
-
-                </div>
-
-                {/* BUTTON */}
-                <button
-                  type="button"
-                  onClick={handleCreateLecture}
-                  className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
-                >
-                  Create Lecture
-                </button>
-
-                {/* COURSE INFO */}
-                <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-
-                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Course ID
+                  <p className="mt-2 text-sm text-slate-500">
+                    Add new lectures and video resources for this course.
                   </p>
 
-                  <p className="mt-2 text-lg font-semibold text-slate-900">
-                    {id}
+                  <div className="mt-6 space-y-4">
+
+                    {/* TITLE */}
+                    <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        Lecture Title
+                      </label>
+
+                      <input
+                        type="text"
+                        placeholder="Enter lecture title"
+                        value={lectureTitle}
+                        onChange={(e) => setLectureTitle(e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                      />
+
+                    </div>
+
+                    {/* VIDEO URL */}
+                    <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        Video URL
+                      </label>
+
+                      <input
+                        type="text"
+                        placeholder="https://youtube.com/..."
+                        value={videoUrl}
+                        onChange={(e) => setVideoUrl(e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                      />
+
+                    </div>
+
+                    {/* BUTTON */}
+                    <button
+                      type="button"
+                      onClick={handleCreateLecture}
+                      className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+                    >
+                      Create Lecture
+                    </button>
+
+                    {/* COURSE ID */}
+                    <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+
+                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        Course ID
+                      </p>
+
+                      <p className="mt-2 text-lg font-semibold text-slate-900">
+                        {id}
+                      </p>
+
+                    </div>
+
+                  </div>
+
+                </>
+
+              ) : (
+
+                <>
+
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    Course Info
+                  </h2>
+
+                  <p className="mt-2 text-sm text-slate-500">
+                    You can view all lectures for this course here.
                   </p>
 
-                </div>
+                  <div className="mt-6 rounded-xl bg-white p-4 ring-1 ring-slate-200">
 
-              </div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Course ID
+                    </p>
+
+                    <p className="mt-2 text-lg font-semibold text-slate-900">
+                      {id}
+                    </p>
+
+                  </div>
+
+                </>
+
+              )}
 
             </aside>
 
