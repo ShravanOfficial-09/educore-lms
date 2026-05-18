@@ -79,3 +79,30 @@ export const createLecture = async (courseId, lectureData) => {
 
   return response.data;
 };
+
+// ENROLL IN COURSE API
+export const enrollInCourse = async (courseId) => {
+
+  const response = await axios.post(
+    `${BASE_URL}/enrollments/enroll/${courseId}`,
+    {},
+    {
+      headers: getAuthHeader(),
+    }
+  );
+
+  return response.data;
+};
+
+// CHECK ENROLLMENT API
+export const checkEnrollment = async (courseId) => {
+
+  const response = await axios.get(
+    `${BASE_URL}/enrollments/check/${courseId}`,
+    {
+      headers: getAuthHeader(),
+    }
+  );
+
+  return response.data;
+};

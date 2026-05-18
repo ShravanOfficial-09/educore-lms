@@ -31,3 +31,7 @@ export const getUserRole = () => {
 export const isAdmin = () => {
   return getUserRole() === "ADMIN";
 };
+
+export const isStudent = () => {
+  return getUserRole() === "STUDENT";
+};
