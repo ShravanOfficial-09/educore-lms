@@ -106,3 +106,30 @@ export const checkEnrollment = async (courseId) => {
 
   return response.data;
 };
+
+// MARK LECTURE AS COMPLETED API
+export const markLectureCompleted = async (lectureId) => {
+
+  const response = await axios.post(
+    `${BASE_URL}/progress/complete/${lectureId}`,
+    {},
+    {
+      headers: getAuthHeader(),
+    }
+  );
+
+  return response.data;
+};
+
+// GET COURSE PROGRESS API
+export const getCourseProgress = async (courseId) => {
+
+  const response = await axios.get(
+    `${BASE_URL}/progress/course/${courseId}`,
+    {
+      headers: getAuthHeader(),
+    }
+  );
+
+  return response.data;
+};
