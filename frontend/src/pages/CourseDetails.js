@@ -4,14 +4,20 @@ import Navbar from "../components/Navbar";
 import {
   addQuestion,
   checkEnrollment,
+  createComment,
   createLecture,
   createQuiz,
   enrollInCourse,
+  getCertificate,
   getCourseProgress,
+  getLectureComments,
+  getLectureResources,
   getLecturesByCourse,
   getQuizByLecture,
   markLectureCompleted,
   submitQuiz,
+  uploadFile,
+  uploadResource,
 } from "../services/api";
 import { isAdmin, isStudent } from "../utils/auth";
 
@@ -51,6 +57,36 @@ const getYouTubeEmbedUrl = (url) => {
   }
 };
 
+const getInitials = (email) => {
+  if (!email) {
+    return "U";
+  }
+
+  const namePart = email.split("@")[0];
+  const cleaned = namePart.replace(/[^a-zA-Z0-9]/g, " ").trim();
+  const pieces = cleaned.split(/\s+/).filter(Boolean);
+
+  if (pieces.length >= 2) {
+    return `${pieces[0][0]}${pieces[1][0]}`.toUpperCase();
+  }
+
+  return namePart.slice(0, 2).toUpperCase();
+};
+
+const formatTimestamp = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString();
+};
+
 function CourseDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -74,6 +110,24 @@ function CourseDetails() {
   });
   const [markingCompleted, setMarkingCompleted] = useState(false);
 
+  const [resources, setResources] = useState([]);
+  const [loadingResources, setLoadingResources] = useState(false);
+  const [uploadingResource, setUploadingResource] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [resourceTitle, setResourceTitle] = useState("");
+  const [resourceFileUrl, setResourceFileUrl] = useState("");
+  const [selectedUploadFile, setSelectedUploadFile] = useState(null);
+  const [uploadedFileName, setUploadedFileName] = useState("");
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+
+  const [comments, setComments] = useState([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [postingComment, setPostingComment] = useState(false);
+  const [commentMessage, setCommentMessage] = useState("");
+
+  const [certificate, setCertificate] = useState(null);
+  const [loadingCertificate, setLoadingCertificate] = useState(false);
+
   const [quiz, setQuiz] = useState(null);
   const [loadingQuiz, setLoadingQuiz] = useState(false);
   const [quizResult, setQuizResult] = useState(null);
@@ -94,7 +148,6 @@ function CourseDetails() {
 
   const adminUser = useMemo(() => isAdmin(), []);
   const studentUser = useMemo(() => isStudent(), []);
-
   const canViewLectures = adminUser || !studentUser || enrolled;
 
   const fetchLectures = async () => {
@@ -106,10 +159,7 @@ function CourseDetails() {
       setLectures(response.data);
     } catch (error) {
       console.log(error);
-      alert(
-        error?.response?.data?.message ||
-          "Failed to fetch lectures"
-      );
+      alert(error?.response?.data?.message || "Failed to fetch lectures");
     } finally {
       setLoadingLectures(false);
     }
@@ -132,10 +182,7 @@ function CourseDetails() {
       setProgress(response.data);
     } catch (error) {
       console.log(error);
-      alert(
-        error?.response?.data?.message ||
-          "Failed to fetch course progress"
-      );
+      alert(error?.response?.data?.message || "Failed to fetch course progress");
     }
   };
 
@@ -152,12 +199,69 @@ function CourseDetails() {
       setEnrolled(response.data.enrolled);
     } catch (error) {
       console.log(error);
-      alert(
-        error?.response?.data?.message ||
-          "Failed to check enrollment status"
-      );
+      alert(error?.response?.data?.message || "Failed to check enrollment status");
     } finally {
       setCheckingEnrollment(false);
+    }
+  };
+
+  const fetchResources = async (lectureId) => {
+    if (!lectureId) {
+      setResources([]);
+      return;
+    }
+
+    try {
+      setLoadingResources(true);
+
+      const response = await getLectureResources(lectureId);
+      console.log(response);
+      setResources(response.data);
+    } catch (error) {
+      console.log(error);
+      alert(error?.response?.data?.message || "Failed to fetch resources");
+    } finally {
+      setLoadingResources(false);
+    }
+  };
+
+  const fetchComments = async (lectureId) => {
+    if (!lectureId) {
+      setComments([]);
+      return;
+    }
+
+    try {
+      setLoadingComments(true);
+
+      const response = await getLectureComments(lectureId);
+      console.log(response);
+      setComments(response.data);
+    } catch (error) {
+      console.log(error);
+      alert(error?.response?.data?.message || "Failed to fetch comments");
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  const fetchCertificate = async () => {
+    if (!studentUser || !enrolled) {
+      setCertificate(null);
+      return;
+    }
+
+    try {
+      setLoadingCertificate(true);
+
+      const response = await getCertificate(id);
+      console.log(response);
+      setCertificate(response.data);
+    } catch (error) {
+      console.log(error);
+      alert(error?.response?.data?.message || "Failed to fetch certificate");
+    } finally {
+      setLoadingCertificate(false);
     }
   };
 
@@ -196,9 +300,13 @@ function CourseDetails() {
     if (canViewLectures) {
       fetchLectures();
       fetchCourseProgress();
+      fetchCertificate();
     } else {
       setLectures([]);
       setSelectedLecture(null);
+      setResources([]);
+      setComments([]);
+      setCertificate(null);
       setQuiz(null);
     }
   }, [id, canViewLectures]);
@@ -223,6 +331,10 @@ function CourseDetails() {
   useEffect(() => {
     setQuizResult(null);
     setSelectedAnswers({});
+    setResources([]);
+    setComments([]);
+    fetchResources(selectedLecture?.id);
+    fetchComments(selectedLecture?.id);
     fetchQuiz(selectedLecture?.id);
   }, [selectedLecture?.id]);
 
@@ -245,25 +357,18 @@ function CourseDetails() {
     }
 
     try {
-      const lectureData = {
+      await createLecture(id, {
         title: lectureTitle,
         videoUrl,
-      };
-
-      await createLecture(id, lectureData);
+      });
 
       alert("Lecture created successfully");
-
       setLectureTitle("");
       setVideoUrl("");
-
       fetchLectures();
     } catch (error) {
       console.log(error);
-      alert(
-        error?.response?.data?.message ||
-          "Failed to create lecture"
-      );
+      alert(error?.response?.data?.message || "Failed to create lecture");
     }
   };
 
@@ -274,24 +379,17 @@ function CourseDetails() {
       await enrollInCourse(id);
 
       alert("Enrollment successful");
-
       setEnrolled(true);
     } catch (error) {
       console.log(error);
-      alert(
-        error?.response?.data?.message ||
-          "Failed to enroll in course"
-      );
+      alert(error?.response?.data?.message || "Failed to enroll in course");
     } finally {
       setEnrolling(false);
     }
   };
 
   const handleMarkCompleted = async () => {
-    if (
-      !selectedLecture ||
-      isLectureCompleted(selectedLecture.id)
-    ) {
+    if (!selectedLecture || isLectureCompleted(selectedLecture.id)) {
       return;
     }
 
@@ -301,16 +399,117 @@ function CourseDetails() {
       await markLectureCompleted(selectedLecture.id);
 
       alert("Lecture marked as completed");
-
       fetchCourseProgress();
     } catch (error) {
       console.log(error);
-      alert(
-        error?.response?.data?.message ||
-          "Failed to mark lecture as completed"
-      );
+      alert(error?.response?.data?.message || "Failed to mark lecture as completed");
     } finally {
       setMarkingCompleted(false);
+    }
+  };
+
+  const handleUploadResource = async () => {
+    if (!selectedLecture) {
+      alert("Please select a lecture first");
+      return;
+    }
+
+    if (!resourceTitle || !resourceFileUrl) {
+      alert("Please fill all resource fields");
+      return;
+    }
+
+    if (
+      !resourceFileUrl.startsWith("http://") &&
+      !resourceFileUrl.startsWith("https://")
+    ) {
+      alert("Please enter a valid file URL");
+      return;
+    }
+
+    try {
+      setUploadingResource(true);
+
+      await uploadResource(selectedLecture.id, {
+        title: resourceTitle,
+        fileUrl: resourceFileUrl,
+      });
+
+      alert("Resource added successfully");
+      setResourceTitle("");
+      setResourceFileUrl("");
+      setSelectedUploadFile(null);
+      setUploadedFileName("");
+      setUploadSuccess(false);
+      fetchResources(selectedLecture.id);
+    } catch (error) {
+      console.log(error);
+      alert(error?.response?.data?.message || "Failed to add resource");
+    } finally {
+      setUploadingResource(false);
+    }
+  };
+
+  const handleChooseFile = (event) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    setSelectedUploadFile(file);
+    setUploadedFileName(file.name);
+    setUploadSuccess(false);
+  };
+
+  const handleUploadSelectedFile = async () => {
+    if (!selectedUploadFile) {
+      alert("Please choose a file first");
+      return;
+    }
+
+    try {
+      setUploadingFile(true);
+
+      const response = await uploadFile(selectedUploadFile);
+
+      setResourceFileUrl(response.data.fileUrl);
+      setUploadSuccess(true);
+      alert("File uploaded successfully");
+    } catch (error) {
+      console.log(error);
+      alert(error?.response?.data?.message || "Failed to upload file");
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const handleCreateComment = async () => {
+    if (!selectedLecture) {
+      alert("Please select a lecture first");
+      return;
+    }
+
+    if (!commentMessage.trim()) {
+      alert("Please enter a comment");
+      return;
+    }
+
+    try {
+      setPostingComment(true);
+
+      await createComment(selectedLecture.id, {
+        message: commentMessage,
+      });
+
+      alert("Comment added successfully");
+      setCommentMessage("");
+      fetchComments(selectedLecture.id);
+    } catch (error) {
+      console.log(error);
+      alert(error?.response?.data?.message || "Failed to add comment");
+    } finally {
+      setPostingComment(false);
     }
   };
 
@@ -337,10 +536,7 @@ function CourseDetails() {
       setQuiz(response.data);
     } catch (error) {
       console.log(error);
-      alert(
-        error?.response?.data?.message ||
-          "Failed to create quiz"
-      );
+      alert(error?.response?.data?.message || "Failed to create quiz");
     } finally {
       setCreatingQuiz(false);
     }
@@ -390,10 +586,7 @@ function CourseDetails() {
       });
     } catch (error) {
       console.log(error);
-      alert(
-        error?.response?.data?.message ||
-          "Failed to add question"
-      );
+      alert(error?.response?.data?.message || "Failed to add question");
     } finally {
       setAddingQuestion(false);
     }
@@ -427,13 +620,114 @@ function CourseDetails() {
       alert("Quiz submitted successfully");
     } catch (error) {
       console.log(error);
-      alert(
-        error?.response?.data?.message ||
-          "Failed to submit quiz"
-      );
+      alert(error?.response?.data?.message || "Failed to submit quiz");
     } finally {
       setSubmittingQuiz(false);
     }
+  };
+
+  const handleDownloadCertificate = () => {
+    if (!certificate?.eligible) {
+      return;
+    }
+
+    const certificateWindow = window.open("", "_blank", "width=1100,height=800");
+
+    if (!certificateWindow) {
+      alert("Please allow pop-ups to download the certificate");
+      return;
+    }
+
+    const completionDate = certificate.completionDate
+      ? formatTimestamp(certificate.completionDate)
+      : "Completed";
+
+    certificateWindow.document.write(`
+      <html>
+        <head>
+          <title>EduCore LMS Certificate</title>
+          <style>
+            body {
+              margin: 0;
+              padding: 32px;
+              background: #f8fafc;
+              font-family: Arial, sans-serif;
+            }
+            .certificate {
+              max-width: 960px;
+              margin: 0 auto;
+              background: white;
+              border: 8px solid #0f172a;
+              padding: 56px;
+              text-align: center;
+              box-sizing: border-box;
+            }
+            .brand {
+              color: #0284c7;
+              font-size: 18px;
+              font-weight: bold;
+              letter-spacing: 3px;
+              text-transform: uppercase;
+            }
+            h1 {
+              margin: 20px 0 12px;
+              font-size: 44px;
+              color: #0f172a;
+            }
+            .subtitle {
+              font-size: 18px;
+              color: #475569;
+              margin-bottom: 40px;
+            }
+            .name {
+              font-size: 38px;
+              font-weight: bold;
+              color: #111827;
+              margin: 24px 0;
+            }
+            .course {
+              font-size: 28px;
+              color: #0284c7;
+              font-weight: bold;
+              margin: 20px 0 36px;
+            }
+            .footer {
+              margin-top: 48px;
+              display: flex;
+              justify-content: space-between;
+              align-items: end;
+              gap: 24px;
+            }
+            .line {
+              width: 260px;
+              border-top: 2px solid #cbd5e1;
+              padding-top: 12px;
+              color: #475569;
+              font-size: 14px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="certificate">
+            <div class="brand">EduCore LMS</div>
+            <h1>Certificate of Completion</h1>
+            <div class="subtitle">This certificate is proudly awarded to</div>
+            <div class="name">${certificate.studentName}</div>
+            <div class="subtitle">for successfully completing the course</div>
+            <div class="course">${certificate.courseTitle}</div>
+            <div class="subtitle">Completion Date: ${completionDate}</div>
+            <div class="footer">
+              <div class="line">Learner Signature</div>
+              <div class="line">EduCore LMS</div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+
+    certificateWindow.document.close();
+    certificateWindow.focus();
+    certificateWindow.print();
   };
 
   const embeddedVideoUrl = getYouTubeEmbedUrl(selectedLecture?.videoUrl);
@@ -462,8 +756,8 @@ function CourseDetails() {
             </h1>
 
             <p className="mt-3 max-w-2xl text-sm leading-6 text-sky-50 sm:text-base">
-              Learn, track progress, and take quizzes from one modern LMS
-              dashboard.
+              Learn, review lecture resources, track progress, and take quizzes
+              from one professional LMS workspace.
             </p>
           </div>
 
@@ -507,8 +801,7 @@ function CourseDetails() {
                   </h2>
 
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                    Enroll in this course to access lectures, watch videos, and
-                    attempt quizzes.
+                    Enroll in this course to access lectures, PDFs, and quizzes.
                   </p>
                 </div>
 
@@ -619,9 +912,7 @@ function CourseDetails() {
 
                               <div
                                 className={`h-3 w-3 rounded-full ${
-                                  completed
-                                    ? "bg-emerald-500"
-                                    : "bg-slate-300"
+                                  completed ? "bg-emerald-500" : "bg-slate-300"
                                 }`}
                               />
                             </div>
@@ -638,8 +929,8 @@ function CourseDetails() {
               <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 {!canViewLectures ? (
                   <div className="flex min-h-[420px] flex-col items-center justify-center text-center">
-                    <div className="rounded-full bg-amber-100 p-4 text-3xl">
-                      Lock
+                    <div className="rounded-full bg-amber-100 px-5 py-4 text-sm font-semibold text-amber-700">
+                      Locked
                     </div>
 
                     <h2 className="mt-5 text-2xl font-bold text-slate-900">
@@ -647,7 +938,7 @@ function CourseDetails() {
                     </h2>
 
                     <p className="mt-3 max-w-md text-sm leading-6 text-slate-600">
-                      Enroll in this course to watch lectures, attempt quizzes,
+                      Enroll in this course to watch lectures, open PDFs, attempt quizzes,
                       and track your learning progress.
                     </p>
                   </div>
@@ -713,6 +1004,360 @@ function CourseDetails() {
                   </div>
                 )}
               </div>
+
+              {canViewLectures && selectedLecture && (
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h2 className="text-xl font-semibold text-slate-900">
+                        Lecture Resources
+                      </h2>
+
+                      <p className="mt-1 text-sm text-slate-500">
+                        PDFs and supporting files for: {selectedLecture.title}
+                      </p>
+                    </div>
+
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                      {resources.length} Resources
+                    </span>
+                  </div>
+
+                  {adminUser && (
+                    <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                      <h3 className="text-lg font-semibold text-slate-900">
+                        Add Resource
+                      </h3>
+
+                      <div className="mt-4 space-y-4">
+                        <input
+                          type="text"
+                          placeholder="Resource title"
+                          value={resourceTitle}
+                          onChange={(e) => setResourceTitle(e.target.value)}
+                          className="rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                        />
+
+                        <div className="rounded-2xl border-2 border-dashed border-slate-300 bg-white p-5 transition hover:border-sky-400 hover:bg-sky-50/40">
+                          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">
+                                Upload PDF, image, or thumbnail
+                              </p>
+                              <p className="mt-1 text-sm text-slate-500">
+                                Choose a file and upload it to Cloudinary. The file URL will be filled automatically.
+                              </p>
+                            </div>
+
+                            <label className="inline-flex cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
+                              Choose File
+                              <input
+                                type="file"
+                                accept=".pdf,image/*"
+                                onChange={handleChooseFile}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+
+                          <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+                            <div className="min-w-0 flex-1 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200">
+                              {uploadedFileName || "No file selected yet"}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={handleUploadSelectedFile}
+                              disabled={uploadingFile || !selectedUploadFile}
+                              className="rounded-xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                              {uploadingFile ? "Uploading..." : "Upload File"}
+                            </button>
+                          </div>
+
+                          {uploadSuccess && (
+                            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                              File uploaded successfully. The resource URL has been filled in below.
+                            </div>
+                          )}
+                        </div>
+
+                        <input
+                          type="text"
+                          placeholder="Uploaded file URL will appear here"
+                          value={resourceFileUrl}
+                          onChange={(e) => setResourceFileUrl(e.target.value)}
+                          className="rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                        />
+
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                          <button
+                            type="button"
+                            onClick={handleUploadResource}
+                            disabled={uploadingResource}
+                            className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70"
+                          >
+                            {uploadingResource ? "Adding..." : "Add Resource"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {loadingResources ? (
+                    <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
+                      Loading resources...
+                    </div>
+                  ) : resources.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
+                      No resources available for this lecture yet.
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {resources.map((resource) => (
+                        <div
+                          key={resource.id}
+                          className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-100 text-xs font-bold text-rose-700">
+                              PDF
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <h3 className="truncate text-base font-semibold text-slate-900">
+                                {resource.title}
+                              </h3>
+
+                              <p className="mt-2 line-clamp-2 break-all text-sm text-slate-500">
+                                {resource.fileUrl}
+                              </p>
+
+                              <div className="mt-4 flex flex-wrap gap-3">
+                                <a
+                                  href={resource.fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                                >
+                                  Open PDF
+                                </a>
+
+                                <a
+                                  href={resource.fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  download
+                                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                                >
+                                  Download
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {studentUser && enrolled && (
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h2 className="text-xl font-semibold text-slate-900">
+                        Course Certificate
+                      </h2>
+
+                      <p className="mt-1 text-sm text-slate-500">
+                        Unlock your certificate after completing all course lectures.
+                      </p>
+                    </div>
+
+                    {certificate?.eligible && (
+                      <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                        Certificate Ready
+                      </span>
+                    )}
+                  </div>
+
+                  {loadingCertificate ? (
+                    <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
+                      Loading certificate...
+                    </div>
+                  ) : certificate?.eligible ? (
+                    <div className="space-y-5">
+                      <div className="overflow-hidden rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-8 shadow-sm">
+                        <div className="rounded-2xl border-4 border-slate-900 bg-white px-6 py-10 text-center">
+                          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-700">
+                            EduCore LMS
+                          </p>
+
+                          <h3 className="mt-5 text-3xl font-bold text-slate-900 sm:text-4xl">
+                            Certificate of Completion
+                          </h3>
+
+                          <p className="mt-6 text-sm uppercase tracking-[0.2em] text-slate-500">
+                            This certificate is proudly presented to
+                          </p>
+
+                          <p className="mt-5 text-3xl font-bold text-slate-900 sm:text-4xl">
+                            {certificate.studentName}
+                          </p>
+
+                          <p className="mt-6 text-sm uppercase tracking-[0.2em] text-slate-500">
+                            For successfully completing
+                          </p>
+
+                          <p className="mt-4 text-2xl font-semibold text-sky-700 sm:text-3xl">
+                            {certificate.courseTitle}
+                          </p>
+
+                          <div className="mt-10 grid gap-6 sm:grid-cols-2">
+                            <div className="rounded-2xl bg-slate-50 px-5 py-4">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                Completion Date
+                              </p>
+                              <p className="mt-2 text-sm font-semibold text-slate-900">
+                                {formatTimestamp(certificate.completionDate)}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl bg-slate-50 px-5 py-4">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                Status
+                              </p>
+                              <p className="mt-2 text-sm font-semibold text-emerald-700">
+                                Course Completed
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleDownloadCertificate}
+                        className="rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+                      >
+                        Download Certificate
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold text-slate-900">
+                            Certificate Locked
+                          </h3>
+                          <p className="mt-2 text-sm leading-6 text-slate-600">
+                            Complete all lectures to unlock your course certificate.
+                            You currently have {progress.progressPercentage}% progress.
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl bg-white px-5 py-4 text-center shadow-sm ring-1 ring-amber-200">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Progress
+                          </p>
+                          <p className="mt-2 text-2xl font-bold text-amber-600">
+                            {progress.progressPercentage}%
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {canViewLectures && selectedLecture && (
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h2 className="text-xl font-semibold text-slate-900">
+                        Discussion
+                      </h2>
+
+                      <p className="mt-1 text-sm text-slate-500">
+                        Questions and comments for: {selectedLecture.title}
+                      </p>
+                    </div>
+
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                      {comments.length} Comments
+                    </span>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                    <h3 className="text-lg font-semibold text-slate-900">
+                      Add Comment
+                    </h3>
+
+                    <div className="mt-4 space-y-4">
+                      <textarea
+                        placeholder="Share a thought, ask a question, or leave a note..."
+                        value={commentMessage}
+                        onChange={(e) => setCommentMessage(e.target.value)}
+                        rows="4"
+                        className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={handleCreateComment}
+                        disabled={postingComment}
+                        className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        {postingComment ? "Posting..." : "Post Comment"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-6">
+                    {loadingComments ? (
+                      <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
+                        Loading discussion...
+                      </div>
+                    ) : comments.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
+                        No comments yet. Start the discussion.
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {comments.map((comment) => (
+                          <div
+                            key={comment.id}
+                            className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
+                          >
+                            <div className="flex items-start gap-4">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sm font-bold text-sky-700">
+                                {getInitials(comment.userEmail)}
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                  <p className="truncate text-sm font-semibold text-slate-900">
+                                    {comment.userEmail}
+                                  </p>
+
+                                  <p className="text-xs text-slate-500">
+                                    {formatTimestamp(comment.createdAt)}
+                                  </p>
+                                </div>
+
+                                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                                  {comment.message}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {canViewLectures && selectedLecture && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

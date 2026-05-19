@@ -188,3 +188,90 @@ export const submitQuiz = async (quizId, submissionData) => {
 
   return response.data;
 };
+
+// UPLOAD RESOURCE API
+export const uploadResource = async (lectureId, resourceData) => {
+
+  const response = await axios.post(
+    `${BASE_URL}/resources/upload/${lectureId}`,
+    resourceData,
+    {
+      headers: getAuthHeader(),
+    }
+  );
+
+  return response.data;
+};
+
+// GET LECTURE RESOURCES API
+export const getLectureResources = async (lectureId) => {
+
+  const response = await axios.get(
+    `${BASE_URL}/resources/lecture/${lectureId}`,
+    {
+      headers: getAuthHeader(),
+    }
+  );
+
+  return response.data;
+};
+
+// CREATE COMMENT API
+export const createComment = async (lectureId, commentData) => {
+
+  const response = await axios.post(
+    `${BASE_URL}/comments/create/${lectureId}`,
+    commentData,
+    {
+      headers: getAuthHeader(),
+    }
+  );
+
+  return response.data;
+};
+
+// GET LECTURE COMMENTS API
+export const getLectureComments = async (lectureId) => {
+
+  const response = await axios.get(
+    `${BASE_URL}/comments/lecture/${lectureId}`,
+    {
+      headers: getAuthHeader(),
+    }
+  );
+
+  return response.data;
+};
+
+// GET CERTIFICATE API
+export const getCertificate = async (courseId) => {
+
+  const response = await axios.get(
+    `${BASE_URL}/certificates/course/${courseId}`,
+    {
+      headers: getAuthHeader(),
+    }
+  );
+
+  return response.data;
+};
+
+// FILE UPLOAD API
+export const uploadFile = async (file) => {
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await axios.post(
+    `${BASE_URL}/upload/file`,
+    formData,
+    {
+      headers: {
+        ...getAuthHeader(),
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+
+  return response.data;
+};
