@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import toast from "react-hot-toast";
 import { useNavigate, useParams } from "react-router-dom";
+import LoadingSkeleton from "../components/LoadingSkeleton";
 import Navbar from "../components/Navbar";
 import {
   addQuestion,
@@ -20,6 +23,10 @@ import {
   uploadResource,
 } from "../services/api";
 import { isAdmin, isStudent } from "../utils/auth";
+
+const getErrorMessage = (error, fallbackMessage) => {
+  return error?.response?.data?.message || fallbackMessage;
+};
 
 const getYouTubeEmbedUrl = (url) => {
   if (!url) {
@@ -64,10 +71,10 @@ const getInitials = (email) => {
 
   const namePart = email.split("@")[0];
   const cleaned = namePart.replace(/[^a-zA-Z0-9]/g, " ").trim();
-  const pieces = cleaned.split(/\s+/).filter(Boolean);
+  const parts = cleaned.split(/\s+/).filter(Boolean);
 
-  if (pieces.length >= 2) {
-    return `${pieces[0][0]}${pieces[1][0]}`.toUpperCase();
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
   }
 
   return namePart.slice(0, 2).toUpperCase();
@@ -87,30 +94,103 @@ const formatTimestamp = (value) => {
   return date.toLocaleString();
 };
 
+const resetProgressState = {
+  completedLectures: 0,
+  totalLectures: 0,
+  progressPercentage: 0,
+  completedLectureIds: [],
+};
+
+function SectionHeader({ title, description, badge }) {
+  return (
+    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h2 className="text-2xl font-semibold text-slate-100">
+          {title}
+        </h2>
+        {description ? (
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            {description}
+          </p>
+        ) : null}
+      </div>
+
+      {badge ? <span className="badge-premium">{badge}</span> : null}
+    </div>
+  );
+}
+
+function EmptyState({ title, description, action }) {
+  return (
+    <div className="surface-soft flex min-h-[220px] flex-col items-center justify-center px-6 py-10 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-slate-800 text-sm font-semibold text-slate-200">
+        EC
+      </div>
+      <h3 className="mt-5 text-xl font-semibold text-slate-100">
+        {title}
+      </h3>
+      <p className="mt-3 max-w-lg text-sm leading-7 text-slate-400">
+        {description}
+      </p>
+      {action ? <div className="mt-6">{action}</div> : null}
+    </div>
+  );
+}
+
+function InlineError({ message, onRetry }) {
+  return (
+    <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-4 text-sm text-rose-200">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p>{message}</p>
+        {onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="button-secondary !px-4 !py-2"
+          >
+            Try Again
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function InsightCard({ label, value, accent }) {
+  return (
+    <div className={`rounded-3xl border border-white/10 bg-gradient-to-br ${accent} p-5`}>
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+        {label}
+      </p>
+      <p className="mt-3 text-2xl font-semibold text-slate-100">
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function CourseDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [lectures, setLectures] = useState([]);
   const [selectedLecture, setSelectedLecture] = useState(null);
-
+  const [lectureError, setLectureError] = useState("");
+  const [loadingLectures, setLoadingLectures] = useState(false);
+  const [creatingLecture, setCreatingLecture] = useState(false);
   const [lectureTitle, setLectureTitle] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
 
   const [enrolled, setEnrolled] = useState(false);
   const [checkingEnrollment, setCheckingEnrollment] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
-  const [loadingLectures, setLoadingLectures] = useState(false);
 
-  const [progress, setProgress] = useState({
-    completedLectures: 0,
-    totalLectures: 0,
-    progressPercentage: 0,
-    completedLectureIds: [],
-  });
+  const [progress, setProgress] = useState(resetProgressState);
+  const [progressError, setProgressError] = useState("");
   const [markingCompleted, setMarkingCompleted] = useState(false);
 
   const [resources, setResources] = useState([]);
+  const [resourceError, setResourceError] = useState("");
   const [loadingResources, setLoadingResources] = useState(false);
   const [uploadingResource, setUploadingResource] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -121,21 +201,23 @@ function CourseDetails() {
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
   const [comments, setComments] = useState([]);
+  const [commentError, setCommentError] = useState("");
   const [loadingComments, setLoadingComments] = useState(false);
   const [postingComment, setPostingComment] = useState(false);
   const [commentMessage, setCommentMessage] = useState("");
 
   const [certificate, setCertificate] = useState(null);
+  const [certificateError, setCertificateError] = useState("");
   const [loadingCertificate, setLoadingCertificate] = useState(false);
 
   const [quiz, setQuiz] = useState(null);
+  const [quizError, setQuizError] = useState("");
   const [loadingQuiz, setLoadingQuiz] = useState(false);
-  const [quizResult, setQuizResult] = useState(null);
-  const [selectedAnswers, setSelectedAnswers] = useState({});
   const [creatingQuiz, setCreatingQuiz] = useState(false);
   const [addingQuestion, setAddingQuestion] = useState(false);
   const [submittingQuiz, setSubmittingQuiz] = useState(false);
-
+  const [quizResult, setQuizResult] = useState(null);
+  const [selectedAnswers, setSelectedAnswers] = useState({});
   const [quizTitle, setQuizTitle] = useState("");
   const [questionForm, setQuestionForm] = useState({
     question: "",
@@ -150,43 +232,24 @@ function CourseDetails() {
   const studentUser = useMemo(() => isStudent(), []);
   const canViewLectures = adminUser || !studentUser || enrolled;
 
-  const fetchLectures = async () => {
+  const fetchLectures = useCallback(async () => {
     try {
       setLoadingLectures(true);
+      setLectureError("");
 
       const response = await getLecturesByCourse(id);
-      console.log(response);
-      setLectures(response.data);
+      setLectures(response.data || []);
     } catch (error) {
       console.log(error);
-      alert(error?.response?.data?.message || "Failed to fetch lectures");
+      const message = getErrorMessage(error, "Failed to fetch lectures.");
+      setLectureError(message);
+      toast.error(message);
     } finally {
       setLoadingLectures(false);
     }
-  };
+  }, [id]);
 
-  const fetchCourseProgress = async () => {
-    if (!studentUser || !enrolled) {
-      setProgress({
-        completedLectures: 0,
-        totalLectures: 0,
-        progressPercentage: 0,
-        completedLectureIds: [],
-      });
-      return;
-    }
-
-    try {
-      const response = await getCourseProgress(id);
-      console.log(response);
-      setProgress(response.data);
-    } catch (error) {
-      console.log(error);
-      alert(error?.response?.data?.message || "Failed to fetch course progress");
-    }
-  };
-
-  const fetchEnrollmentStatus = async () => {
+  const fetchEnrollmentStatus = useCallback(async () => {
     if (!studentUser) {
       setEnrolled(false);
       setCheckingEnrollment(false);
@@ -195,106 +258,136 @@ function CourseDetails() {
 
     try {
       const response = await checkEnrollment(id);
-      console.log(response);
-      setEnrolled(response.data.enrolled);
+      setEnrolled(Boolean(response.data?.enrolled));
     } catch (error) {
       console.log(error);
-      alert(error?.response?.data?.message || "Failed to check enrollment status");
+      toast.error(getErrorMessage(error, "Failed to check enrollment status."));
     } finally {
       setCheckingEnrollment(false);
     }
-  };
+  }, [id, studentUser]);
 
-  const fetchResources = async (lectureId) => {
+  const fetchCourseProgress = useCallback(async () => {
+    if (!studentUser || !enrolled) {
+      setProgress(resetProgressState);
+      setProgressError("");
+      return;
+    }
+
+    try {
+      setProgressError("");
+      const response = await getCourseProgress(id);
+      setProgress({
+        completedLectures: response.data?.completedLectures || 0,
+        totalLectures: response.data?.totalLectures || 0,
+        progressPercentage: response.data?.progressPercentage || 0,
+        completedLectureIds: response.data?.completedLectureIds || [],
+      });
+    } catch (error) {
+      console.log(error);
+      const message = getErrorMessage(error, "Failed to fetch course progress.");
+      setProgressError(message);
+      toast.error(message);
+    }
+  }, [enrolled, id, studentUser]);
+
+  const fetchResources = useCallback(async (lectureId) => {
     if (!lectureId) {
       setResources([]);
+      setResourceError("");
       return;
     }
 
     try {
       setLoadingResources(true);
-
+      setResourceError("");
       const response = await getLectureResources(lectureId);
-      console.log(response);
-      setResources(response.data);
+      setResources(response.data || []);
     } catch (error) {
       console.log(error);
-      alert(error?.response?.data?.message || "Failed to fetch resources");
+      const message = getErrorMessage(error, "Failed to fetch resources.");
+      setResourceError(message);
+      toast.error(message);
     } finally {
       setLoadingResources(false);
     }
-  };
+  }, []);
 
-  const fetchComments = async (lectureId) => {
+  const fetchComments = useCallback(async (lectureId) => {
     if (!lectureId) {
       setComments([]);
+      setCommentError("");
       return;
     }
 
     try {
       setLoadingComments(true);
-
+      setCommentError("");
       const response = await getLectureComments(lectureId);
-      console.log(response);
-      setComments(response.data);
+      setComments(response.data || []);
     } catch (error) {
       console.log(error);
-      alert(error?.response?.data?.message || "Failed to fetch comments");
+      const message = getErrorMessage(error, "Failed to fetch discussion.");
+      setCommentError(message);
+      toast.error(message);
     } finally {
       setLoadingComments(false);
     }
-  };
+  }, []);
 
-  const fetchCertificate = async () => {
+  const fetchCertificate = useCallback(async () => {
     if (!studentUser || !enrolled) {
       setCertificate(null);
+      setCertificateError("");
       return;
     }
 
     try {
       setLoadingCertificate(true);
-
+      setCertificateError("");
       const response = await getCertificate(id);
-      console.log(response);
-      setCertificate(response.data);
+      setCertificate(response.data || null);
     } catch (error) {
       console.log(error);
-      alert(error?.response?.data?.message || "Failed to fetch certificate");
+      const message = getErrorMessage(error, "Failed to fetch certificate.");
+      setCertificateError(message);
+      toast.error(message);
     } finally {
       setLoadingCertificate(false);
     }
-  };
+  }, [enrolled, id, studentUser]);
 
-  const fetchQuiz = async (lectureId) => {
+  const fetchQuiz = useCallback(async (lectureId) => {
     if (!lectureId) {
       setQuiz(null);
+      setQuizError("");
       return;
     }
 
     try {
       setLoadingQuiz(true);
-
+      setQuizError("");
       const response = await getQuizByLecture(lectureId);
-      console.log(response);
-      setQuiz(response.data);
+      setQuiz(response.data || null);
     } catch (error) {
       console.log(error);
+      const message = getErrorMessage(error, "Failed to fetch quiz.");
 
-      const errorMessage = error?.response?.data?.message || "";
-
-      if (errorMessage.toLowerCase().includes("quiz not found")) {
+      if (message.toLowerCase().includes("quiz not found")) {
         setQuiz(null);
+        setQuizError("");
       } else {
-        alert(errorMessage || "Failed to fetch quiz");
+        setQuizError(message);
+        toast.error(message);
       }
     } finally {
       setLoadingQuiz(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchEnrollmentStatus();
-  }, [id]);
+  }, [fetchEnrollmentStatus]);
 
   useEffect(() => {
     if (canViewLectures) {
@@ -306,10 +399,11 @@ function CourseDetails() {
       setSelectedLecture(null);
       setResources([]);
       setComments([]);
-      setCertificate(null);
       setQuiz(null);
+      setCertificate(null);
+      setProgress(resetProgressState);
     }
-  }, [id, canViewLectures]);
+  }, [canViewLectures, fetchCertificate, fetchCourseProgress, fetchLectures]);
 
   useEffect(() => {
     if (lectures.length === 0) {
@@ -317,72 +411,63 @@ function CourseDetails() {
       return;
     }
 
-    const lectureStillExists = lectures.find(
+    const nextSelectedLecture = lectures.find(
       (lecture) => lecture.id === selectedLecture?.id
     );
 
-    if (lectureStillExists) {
-      setSelectedLecture(lectureStillExists);
-    } else {
-      setSelectedLecture(lectures[0]);
-    }
-  }, [lectures]);
+    setSelectedLecture(nextSelectedLecture || lectures[0]);
+  }, [lectures, selectedLecture?.id]);
 
   useEffect(() => {
     setQuizResult(null);
     setSelectedAnswers({});
-    setResources([]);
-    setComments([]);
     fetchResources(selectedLecture?.id);
     fetchComments(selectedLecture?.id);
     fetchQuiz(selectedLecture?.id);
-  }, [selectedLecture?.id]);
+  }, [fetchComments, fetchQuiz, fetchResources, selectedLecture?.id]);
 
   const isLectureCompleted = (lectureId) => {
     return (progress.completedLectureIds || []).includes(lectureId);
   };
 
   const handleCreateLecture = async () => {
-    if (!lectureTitle || !videoUrl) {
-      alert("Please fill all fields");
+    if (!lectureTitle.trim() || !videoUrl.trim()) {
+      toast.error("Please fill all lecture fields.");
       return;
     }
 
-    if (
-      !videoUrl.startsWith("http://") &&
-      !videoUrl.startsWith("https://")
-    ) {
-      alert("Please enter a valid video URL");
+    if (!videoUrl.startsWith("http://") && !videoUrl.startsWith("https://")) {
+      toast.error("Please enter a valid video URL.");
       return;
     }
 
     try {
-      await createLecture(id, {
-        title: lectureTitle,
-        videoUrl,
-      });
-
-      alert("Lecture created successfully");
+      setCreatingLecture(true);
+      await createLecture(id, { title: lectureTitle, videoUrl });
+      toast.success("Lecture created successfully.");
       setLectureTitle("");
       setVideoUrl("");
       fetchLectures();
     } catch (error) {
       console.log(error);
-      alert(error?.response?.data?.message || "Failed to create lecture");
+      toast.error(getErrorMessage(error, "Failed to create lecture."));
+    } finally {
+      setCreatingLecture(false);
     }
   };
 
   const handleEnroll = async () => {
     try {
       setEnrolling(true);
-
       await enrollInCourse(id);
-
-      alert("Enrollment successful");
-      setEnrolled(true);
+      toast.success("Enrollment successful.");
+      await fetchEnrollmentStatus();
+      await fetchLectures();
+      await fetchCourseProgress();
+      await fetchCertificate();
     } catch (error) {
       console.log(error);
-      alert(error?.response?.data?.message || "Failed to enroll in course");
+      toast.error(getErrorMessage(error, "Failed to enroll in course."));
     } finally {
       setEnrolling(false);
     }
@@ -395,58 +480,15 @@ function CourseDetails() {
 
     try {
       setMarkingCompleted(true);
-
       await markLectureCompleted(selectedLecture.id);
-
-      alert("Lecture marked as completed");
-      fetchCourseProgress();
+      toast.success("Lecture marked as completed.");
+      await fetchCourseProgress();
+      await fetchCertificate();
     } catch (error) {
       console.log(error);
-      alert(error?.response?.data?.message || "Failed to mark lecture as completed");
+      toast.error(getErrorMessage(error, "Failed to mark lecture as completed."));
     } finally {
       setMarkingCompleted(false);
-    }
-  };
-
-  const handleUploadResource = async () => {
-    if (!selectedLecture) {
-      alert("Please select a lecture first");
-      return;
-    }
-
-    if (!resourceTitle || !resourceFileUrl) {
-      alert("Please fill all resource fields");
-      return;
-    }
-
-    if (
-      !resourceFileUrl.startsWith("http://") &&
-      !resourceFileUrl.startsWith("https://")
-    ) {
-      alert("Please enter a valid file URL");
-      return;
-    }
-
-    try {
-      setUploadingResource(true);
-
-      await uploadResource(selectedLecture.id, {
-        title: resourceTitle,
-        fileUrl: resourceFileUrl,
-      });
-
-      alert("Resource added successfully");
-      setResourceTitle("");
-      setResourceFileUrl("");
-      setSelectedUploadFile(null);
-      setUploadedFileName("");
-      setUploadSuccess(false);
-      fetchResources(selectedLecture.id);
-    } catch (error) {
-      console.log(error);
-      alert(error?.response?.data?.message || "Failed to add resource");
-    } finally {
-      setUploadingResource(false);
     }
   };
 
@@ -464,50 +506,84 @@ function CourseDetails() {
 
   const handleUploadSelectedFile = async () => {
     if (!selectedUploadFile) {
-      alert("Please choose a file first");
+      toast.error("Please choose a file first.");
       return;
     }
 
     try {
       setUploadingFile(true);
-
       const response = await uploadFile(selectedUploadFile);
-
-      setResourceFileUrl(response.data.fileUrl);
+      setResourceFileUrl(response.data?.fileUrl || "");
       setUploadSuccess(true);
-      alert("File uploaded successfully");
+      toast.success("File uploaded successfully.");
     } catch (error) {
       console.log(error);
-      alert(error?.response?.data?.message || "Failed to upload file");
+      toast.error(getErrorMessage(error, "Failed to upload file."));
     } finally {
       setUploadingFile(false);
     }
   };
 
+  const handleUploadResource = async () => {
+    if (!selectedLecture) {
+      toast.error("Please select a lecture first.");
+      return;
+    }
+
+    if (!resourceTitle.trim() || !resourceFileUrl.trim()) {
+      toast.error("Please fill all resource fields.");
+      return;
+    }
+
+    if (
+      !resourceFileUrl.startsWith("http://") &&
+      !resourceFileUrl.startsWith("https://")
+    ) {
+      toast.error("Please enter a valid file URL.");
+      return;
+    }
+
+    try {
+      setUploadingResource(true);
+      await uploadResource(selectedLecture.id, {
+        title: resourceTitle,
+        fileUrl: resourceFileUrl,
+      });
+      toast.success("Resource added successfully.");
+      setResourceTitle("");
+      setResourceFileUrl("");
+      setSelectedUploadFile(null);
+      setUploadedFileName("");
+      setUploadSuccess(false);
+      fetchResources(selectedLecture.id);
+    } catch (error) {
+      console.log(error);
+      toast.error(getErrorMessage(error, "Failed to add resource."));
+    } finally {
+      setUploadingResource(false);
+    }
+  };
+
   const handleCreateComment = async () => {
     if (!selectedLecture) {
-      alert("Please select a lecture first");
+      toast.error("Please select a lecture first.");
       return;
     }
 
     if (!commentMessage.trim()) {
-      alert("Please enter a comment");
+      toast.error("Please enter a comment.");
       return;
     }
 
     try {
       setPostingComment(true);
-
-      await createComment(selectedLecture.id, {
-        message: commentMessage,
-      });
-
-      alert("Comment added successfully");
+      await createComment(selectedLecture.id, { message: commentMessage });
+      toast.success("Comment added successfully.");
       setCommentMessage("");
       fetchComments(selectedLecture.id);
     } catch (error) {
       console.log(error);
-      alert(error?.response?.data?.message || "Failed to add comment");
+      toast.error(getErrorMessage(error, "Failed to add comment."));
     } finally {
       setPostingComment(false);
     }
@@ -515,28 +591,25 @@ function CourseDetails() {
 
   const handleCreateQuiz = async () => {
     if (!selectedLecture) {
-      alert("Please select a lecture first");
+      toast.error("Please select a lecture first.");
       return;
     }
 
     if (!quizTitle.trim()) {
-      alert("Please enter a quiz title");
+      toast.error("Please enter a quiz title.");
       return;
     }
 
     try {
       setCreatingQuiz(true);
-
-      const response = await createQuiz(selectedLecture.id, {
-        title: quizTitle,
-      });
-
-      alert("Quiz created successfully");
-      setQuizTitle("");
+      const response = await createQuiz(selectedLecture.id, { title: quizTitle });
       setQuiz(response.data);
+      setQuizTitle("");
+      toast.success("Quiz created successfully.");
+      fetchQuiz(selectedLecture.id);
     } catch (error) {
       console.log(error);
-      alert(error?.response?.data?.message || "Failed to create quiz");
+      toast.error(getErrorMessage(error, "Failed to create quiz."));
     } finally {
       setCreatingQuiz(false);
     }
@@ -544,7 +617,7 @@ function CourseDetails() {
 
   const handleAddQuestion = async () => {
     if (!quiz?.quizId) {
-      alert("Create a quiz first");
+      toast.error("Create a quiz first.");
       return;
     }
 
@@ -558,24 +631,20 @@ function CourseDetails() {
     } = questionForm;
 
     if (
-      !question ||
-      !optionA ||
-      !optionB ||
-      !optionC ||
-      !optionD ||
-      !correctAnswer
+      !question.trim() ||
+      !optionA.trim() ||
+      !optionB.trim() ||
+      !optionC.trim() ||
+      !optionD.trim() ||
+      !correctAnswer.trim()
     ) {
-      alert("Please fill all question fields");
+      toast.error("Please fill all question fields.");
       return;
     }
 
     try {
       setAddingQuestion(true);
-
-      const response = await addQuestion(quiz.quizId, questionForm);
-
-      alert("Question added successfully");
-      setQuiz(response.data);
+      await addQuestion(quiz.quizId, questionForm);
       setQuestionForm({
         question: "",
         optionA: "",
@@ -584,9 +653,11 @@ function CourseDetails() {
         optionD: "",
         correctAnswer: "A",
       });
+      toast.success("Question added successfully.");
+      fetchQuiz(selectedLecture?.id);
     } catch (error) {
       console.log(error);
-      alert(error?.response?.data?.message || "Failed to add question");
+      toast.error(getErrorMessage(error, "Failed to add question."));
     } finally {
       setAddingQuestion(false);
     }
@@ -604,23 +675,21 @@ function CourseDetails() {
       return;
     }
 
-    if (quiz.questions.length === 0) {
-      alert("This quiz has no questions yet");
+    if ((quiz.questions || []).length === 0) {
+      toast.error("This quiz has no questions yet.");
       return;
     }
 
     try {
       setSubmittingQuiz(true);
-
       const response = await submitQuiz(quiz.quizId, {
         answers: selectedAnswers,
       });
-
       setQuizResult(response.data);
-      alert("Quiz submitted successfully");
+      toast.success("Quiz submitted successfully.");
     } catch (error) {
       console.log(error);
-      alert(error?.response?.data?.message || "Failed to submit quiz");
+      toast.error(getErrorMessage(error, "Failed to submit quiz."));
     } finally {
       setSubmittingQuiz(false);
     }
@@ -634,7 +703,7 @@ function CourseDetails() {
     const certificateWindow = window.open("", "_blank", "width=1100,height=800");
 
     if (!certificateWindow) {
-      alert("Please allow pop-ups to download the certificate");
+      toast.error("Please allow pop-ups to download the certificate.");
       return;
     }
 
@@ -731,936 +800,1066 @@ function CourseDetails() {
   };
 
   const embeddedVideoUrl = getYouTubeEmbedUrl(selectedLecture?.videoUrl);
+  const progressPercentage = Math.round(progress.progressPercentage || 0);
+  const lectureInsights = [
+    {
+      label: "Lecture count",
+      value: String(lectures.length),
+      accent: "from-sky-500/12 to-cyan-500/10",
+    },
+    {
+      label: "Access",
+      value: adminUser ? "Admin" : enrolled ? "Unlocked" : "Locked",
+      accent: "from-violet-500/12 to-fuchsia-500/10",
+    },
+    {
+      label: "Progress",
+      value: studentUser ? `${progressPercentage}%` : "Live",
+      accent: "from-emerald-500/12 to-teal-500/10",
+    },
+  ];
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-950">
       <Navbar />
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <button
-          type="button"
-          onClick={() => navigate("/courses")}
-          className="mb-6 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+      <main className="app-shell py-8">
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="mb-6 flex items-center justify-between gap-4"
         >
-          Back to Courses
-        </button>
+          <button
+            type="button"
+            onClick={() => navigate("/courses")}
+            className="button-secondary"
+          >
+            Back to Courses
+          </button>
 
-        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="bg-gradient-to-r from-sky-600 to-cyan-500 px-6 py-10 text-white sm:px-8">
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-sky-100">
-              Course Workspace
-            </p>
+          <span className="badge-premium">Course ID {id}</span>
+        </motion.div>
 
-            <h1 className="mt-3 text-3xl font-bold sm:text-4xl">
-              Course #{id}
-            </h1>
-
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-sky-50 sm:text-base">
-              Learn, review lecture resources, track progress, and take quizzes
-              from one professional LMS workspace.
-            </p>
-          </div>
-
-          {studentUser && enrolled && (
-            <div className="border-b border-slate-200 bg-slate-50 px-6 py-6 sm:px-8">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">
-                    Course Progress
-                  </h2>
-
-                  <p className="mt-1 text-sm text-slate-500">
-                    {progress.completedLectures} of {progress.totalLectures} lectures completed
-                  </p>
-                </div>
-
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-sky-600">
-                    {progress.progressPercentage}%
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-200">
-                <div
-                  className="h-full rounded-full bg-sky-500 transition-all duration-500"
-                  style={{
-                    width: `${progress.progressPercentage}%`,
-                  }}
-                />
-              </div>
+        <motion.section
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45 }}
+          className="surface-card hero-gradient overflow-hidden p-8 md:p-10"
+        >
+          <div className="grid gap-8 xl:grid-cols-[1.2fr_0.8fr]">
+            <div>
+              <span className="badge-premium">Course workspace</span>
+              <h1 className="mt-6 max-w-3xl text-4xl font-semibold tracking-tight text-slate-100 md:text-5xl">
+                A premium learning experience for lectures, resources, progress, and assessment.
+              </h1>
+              <p className="mt-5 max-w-2xl text-base leading-7 text-slate-400">
+                This workspace keeps teaching operations and learning flow in one place:
+                watch lectures, unlock materials, track completion, join discussion,
+                take quizzes, and finish with a certificate.
+              </p>
             </div>
-          )}
 
-          {studentUser && !enrolled && !checkingEnrollment && (
-            <div className="border-b border-slate-200 bg-amber-50 px-6 py-8 sm:px-8">
-              <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-900">
-                    Enrollment Required
-                  </h2>
+            <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+              {lectureInsights.map((item, index) => (
+                <motion.div
+                  key={item.label}
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35, delay: 0.06 * index }}
+                >
+                  <InsightCard
+                    label={item.label}
+                    value={item.value}
+                    accent={item.accent}
+                  />
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </motion.section>
 
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                    Enroll in this course to access lectures, PDFs, and quizzes.
-                  </p>
-                </div>
-
+        <div className="mt-8 grid gap-8 xl:grid-cols-[1.75fr_0.85fr]">
+          <div className="space-y-8">
+            {studentUser && !checkingEnrollment && !enrolled ? (
+              <motion.section
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35 }}
+                className="surface-card p-8"
+              >
+                <SectionHeader
+                  title="Enrollment required"
+                  description="Unlock lectures, resources, quizzes, and completion tracking by enrolling in this course."
+                />
                 <button
+                  type="button"
                   onClick={handleEnroll}
                   disabled={enrolling}
-                  className="rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="button-primary"
                 >
                   {enrolling ? "Enrolling..." : "Enroll Now"}
                 </button>
-              </div>
-            </div>
-          )}
+              </motion.section>
+            ) : null}
 
-          <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[0.9fr_1.1fr]">
-            <aside className="space-y-6">
-              {adminUser && (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
-                  <h2 className="text-lg font-semibold text-slate-900">
-                    Create Lecture
-                  </h2>
+            <motion.section
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.05 }}
+              className="surface-card p-6"
+            >
+              <SectionHeader
+                title="Learning player"
+                description="Choose a lecture from the sidebar to update the video, resources, discussion, and quiz."
+                badge={`${lectures.length} lectures`}
+              />
 
-                  <div className="mt-5 space-y-4">
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">
-                        Lecture Title
-                      </label>
+              {lectureError ? (
+                <div className="mb-5">
+                  <InlineError message={lectureError} onRetry={fetchLectures} />
+                </div>
+              ) : null}
 
-                      <input
-                        type="text"
-                        placeholder="Enter lecture title"
-                        value={lectureTitle}
-                        onChange={(e) => setLectureTitle(e.target.value)}
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                      />
+              {checkingEnrollment || loadingLectures ? (
+                <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
+                  <div className="surface-soft space-y-3 p-4">
+                    {Array.from({ length: 6 }).map((_, index) => (
+                      <div key={index} className="rounded-3xl border border-white/10 p-4">
+                        <LoadingSkeleton className="h-4 w-20" />
+                        <LoadingSkeleton className="mt-4 h-5 w-4/5" />
+                        <LoadingSkeleton className="mt-3 h-3 w-1/3" />
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-4">
+                    <LoadingSkeleton className="aspect-video w-full rounded-3xl" />
+                    <div className="surface-soft p-5">
+                      <LoadingSkeleton className="h-6 w-40" />
+                      <LoadingSkeleton className="mt-4 h-4 w-full" />
+                      <LoadingSkeleton className="mt-2 h-4 w-5/6" />
+                      <LoadingSkeleton className="mt-6 h-11 w-44" />
                     </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">
-                        Video URL
-                      </label>
-
-                      <input
-                        type="text"
-                        placeholder="https://youtube.com/..."
-                        value={videoUrl}
-                        onChange={(e) => setVideoUrl(e.target.value)}
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                      />
-                    </div>
-
-                    <button
-                      onClick={handleCreateLecture}
-                      className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
-                    >
-                      Create Lecture
-                    </button>
                   </div>
                 </div>
-              )}
+              ) : !canViewLectures ? null : lectures.length === 0 ? (
+                <EmptyState
+                  title="No lectures available yet"
+                  description="Once lectures are added to this course, the learning player and the full student experience will appear here."
+                />
+              ) : (
+                <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
+                  <aside className="surface-soft max-h-[780px] overflow-auto p-4 scrollbar-soft">
+                    <p className="px-2 text-sm font-semibold text-slate-100">
+                      Lecture navigation
+                    </p>
+                    <p className="px-2 pt-1 text-xs text-slate-400">
+                      The active lesson updates every connected learning module below.
+                    </p>
 
-              {canViewLectures && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                  <div className="mb-5 flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-slate-900">
-                      Lectures
-                    </h2>
-
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                      {lectures.length}
-                    </span>
-                  </div>
-
-                  {loadingLectures ? (
-                    <div className="flex items-center justify-center py-12 text-sm text-slate-500">
-                      Loading lectures...
-                    </div>
-                  ) : lectures.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
-                      No lectures available yet.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {lectures.map((lecture) => {
-                        const completed = isLectureCompleted(lecture.id);
-                        const selected = selectedLecture?.id === lecture.id;
+                    <div className="mt-4 space-y-3">
+                      {lectures.map((lecture, index) => {
+                        const activeLecture = selectedLecture?.id === lecture.id;
+                        const completedLecture = isLectureCompleted(lecture.id);
 
                         return (
-                          <button
+                          <motion.button
                             key={lecture.id}
+                            type="button"
+                            whileHover={{ y: -2 }}
                             onClick={() => setSelectedLecture(lecture)}
-                            className={`w-full rounded-xl border p-4 text-left transition ${
-                              selected
-                                ? "border-sky-500 bg-sky-50"
-                                : "border-slate-200 bg-white hover:bg-slate-50"
+                            className={`w-full rounded-3xl border p-4 text-left transition ${
+                              activeLecture
+                                ? "border-cyan-400/25 bg-indigo-500/10 shadow-lg"
+                                : "border-white/10 bg-slate-900/70 hover:border-cyan-400/15 hover:bg-slate-900"
                             }`}
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-slate-900">
-                                  {lecture.title}
-                                </p>
-
-                                <p className="mt-1 text-xs text-slate-500">
-                                  Lecture #{lecture.id}
-                                </p>
-                              </div>
-
-                              <div
-                                className={`h-3 w-3 rounded-full ${
-                                  completed ? "bg-emerald-500" : "bg-slate-300"
+                            <div className="flex items-start gap-3">
+                              <span
+                                className={`mt-1 h-3 w-3 rounded-full ${
+                                  completedLecture ? "bg-emerald-400" : "bg-slate-700"
                                 }`}
                               />
+
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                                  Lecture {index + 1}
+                                </p>
+                                <p className="mt-2 text-sm font-semibold text-slate-100">
+                                  {lecture.title}
+                                </p>
+                                <p className="mt-3 text-xs text-slate-400">
+                                  {completedLecture ? "Completed" : "Pending"}
+                                </p>
+                              </div>
                             </div>
-                          </button>
+                          </motion.button>
                         );
                       })}
                     </div>
-                  )}
-                </div>
-              )}
-            </aside>
+                  </aside>
 
-            <section className="space-y-6">
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                {!canViewLectures ? (
-                  <div className="flex min-h-[420px] flex-col items-center justify-center text-center">
-                    <div className="rounded-full bg-amber-100 px-5 py-4 text-sm font-semibold text-amber-700">
-                      Locked
-                    </div>
-
-                    <h2 className="mt-5 text-2xl font-bold text-slate-900">
-                      Course Locked
-                    </h2>
-
-                    <p className="mt-3 max-w-md text-sm leading-6 text-slate-600">
-                      Enroll in this course to watch lectures, open PDFs, attempt quizzes,
-                      and track your learning progress.
-                    </p>
-                  </div>
-                ) : !selectedLecture ? (
-                  <div className="flex min-h-[420px] flex-col items-center justify-center text-center">
-                    <h2 className="text-2xl font-bold text-slate-900">
-                      No Lecture Selected
-                    </h2>
-
-                    <p className="mt-3 text-sm text-slate-500">
-                      Select a lecture from the sidebar to begin learning.
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <h2 className="text-2xl font-bold text-slate-900">
-                          {selectedLecture.title}
-                        </h2>
-
-                        <p className="mt-2 text-sm text-slate-500">
-                          Lecture #{selectedLecture.id}
-                        </p>
-                      </div>
-
-                      {studentUser && enrolled && (
-                        <button
-                          onClick={handleMarkCompleted}
-                          disabled={
-                            markingCompleted ||
-                            isLectureCompleted(selectedLecture.id)
-                          }
-                          className={`rounded-xl px-5 py-3 text-sm font-semibold transition ${
-                            isLectureCompleted(selectedLecture.id)
-                              ? "cursor-not-allowed bg-emerald-100 text-emerald-700"
-                              : "bg-slate-900 text-white hover:bg-slate-700"
-                          }`}
-                        >
-                          {isLectureCompleted(selectedLecture.id)
-                            ? "Completed"
-                            : markingCompleted
-                            ? "Saving..."
-                            : "Mark as Completed"}
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="mt-6 aspect-video overflow-hidden rounded-2xl border border-slate-200 bg-black">
+                  <div className="space-y-4">
+                    <div className="overflow-hidden rounded-[28px] border border-slate-900/70 bg-slate-950 shadow-premium">
                       {embeddedVideoUrl ? (
-                        <iframe
-                          src={embeddedVideoUrl}
-                          title={selectedLecture.title}
-                          allowFullScreen
-                          className="h-full w-full"
-                        />
+                        <div className="aspect-video w-full">
+                          <iframe
+                            title={selectedLecture?.title || "Lecture video"}
+                            src={embeddedVideoUrl}
+                            className="h-full w-full"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          />
+                        </div>
                       ) : (
-                        <div className="flex h-full items-center justify-center text-sm text-white">
-                          Invalid or unsupported video URL
+                        <div className="flex aspect-video items-center justify-center px-6 text-center text-sm text-slate-300">
+                          This lecture does not have a supported YouTube embed link yet. You can still open the original video in a new tab.
                         </div>
                       )}
                     </div>
-                  </div>
-                )}
-              </div>
 
-              {canViewLectures && selectedLecture && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h2 className="text-xl font-semibold text-slate-900">
-                        Lecture Resources
-                      </h2>
+                    <div className="surface-soft p-6">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="badge-premium">Now playing</span>
+                        <span className="rounded-full border border-white/10 bg-slate-950/70 px-3 py-1 text-xs font-semibold text-slate-400">
+                          Lecture ID {selectedLecture?.id}
+                        </span>
+                      </div>
 
-                      <p className="mt-1 text-sm text-slate-500">
-                        PDFs and supporting files for: {selectedLecture.title}
-                      </p>
-                    </div>
-
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                      {resources.length} Resources
-                    </span>
-                  </div>
-
-                  {adminUser && (
-                    <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                      <h3 className="text-lg font-semibold text-slate-900">
-                        Add Resource
+                      <h3 className="mt-5 text-3xl font-semibold text-slate-100">
+                        {selectedLecture?.title}
                       </h3>
 
-                      <div className="mt-4 space-y-4">
-                        <input
-                          type="text"
-                          placeholder="Resource title"
-                          value={resourceTitle}
-                          onChange={(e) => setResourceTitle(e.target.value)}
-                          className="rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        />
+                      <p className="mt-4 text-sm leading-7 text-slate-400">
+                        Stay in the flow from here: watch the lecture, open the support materials, join the discussion, complete the lesson, and move into the quiz when it is ready.
+                      </p>
 
-                        <div className="rounded-2xl border-2 border-dashed border-slate-300 bg-white p-5 transition hover:border-sky-400 hover:bg-sky-50/40">
-                          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-900">
-                                Upload PDF, image, or thumbnail
-                              </p>
-                              <p className="mt-1 text-sm text-slate-500">
-                                Choose a file and upload it to Cloudinary. The file URL will be filled automatically.
-                              </p>
-                            </div>
-
-                            <label className="inline-flex cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
-                              Choose File
-                              <input
-                                type="file"
-                                accept=".pdf,image/*"
-                                onChange={handleChooseFile}
-                                className="hidden"
-                              />
-                            </label>
-                          </div>
-
-                          <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
-                            <div className="min-w-0 flex-1 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200">
-                              {uploadedFileName || "No file selected yet"}
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={handleUploadSelectedFile}
-                              disabled={uploadingFile || !selectedUploadFile}
-                              className="rounded-xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-70"
-                            >
-                              {uploadingFile ? "Uploading..." : "Upload File"}
-                            </button>
-                          </div>
-
-                          {uploadSuccess && (
-                            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-                              File uploaded successfully. The resource URL has been filled in below.
-                            </div>
-                          )}
-                        </div>
-
-                        <input
-                          type="text"
-                          placeholder="Uploaded file URL will appear here"
-                          value={resourceFileUrl}
-                          onChange={(e) => setResourceFileUrl(e.target.value)}
-                          className="rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                        />
-
-                        <div className="flex flex-col gap-3 sm:flex-row">
+                      <div className="mt-6 flex flex-wrap gap-3">
+                        {studentUser && selectedLecture ? (
                           <button
                             type="button"
-                            onClick={handleUploadResource}
-                            disabled={uploadingResource}
-                            className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70"
+                            onClick={handleMarkCompleted}
+                            disabled={markingCompleted || isLectureCompleted(selectedLecture.id)}
+                            className={
+                              isLectureCompleted(selectedLecture.id)
+                                ? "inline-flex items-center justify-center rounded-2xl bg-emerald-400/10 px-5 py-3 text-sm font-semibold text-emerald-300"
+                                : "button-primary"
+                            }
                           >
-                            {uploadingResource ? "Adding..." : "Add Resource"}
+                            {isLectureCompleted(selectedLecture.id)
+                              ? "Completed"
+                              : markingCompleted
+                                ? "Marking..."
+                                : "Mark as Completed"}
                           </button>
-                        </div>
+                        ) : null}
+
+                        {selectedLecture?.videoUrl ? (
+                          <a
+                            href={selectedLecture.videoUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="button-secondary"
+                          >
+                            Open Video in New Tab
+                          </a>
+                        ) : null}
                       </div>
                     </div>
-                  )}
+                  </div>
+                </div>
+              )}
+            </motion.section>
 
-                  {loadingResources ? (
-                    <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
-                      Loading resources...
+            {canViewLectures && selectedLecture ? (
+              <motion.section
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.08 }}
+                className="surface-card p-6"
+              >
+                <SectionHeader
+                  title="Resources"
+                  description={`Files and PDFs for ${selectedLecture.title}.`}
+                />
+
+                {resourceError ? (
+                  <div className="mb-5">
+                    <InlineError
+                      message={resourceError}
+                      onRetry={() => fetchResources(selectedLecture.id)}
+                    />
+                  </div>
+                ) : null}
+
+                {adminUser ? (
+                  <div className="mb-6 surface-soft p-5">
+                    <h3 className="text-lg font-semibold text-slate-100">
+                      Upload lecture resource
+                    </h3>
+
+                    <div className="mt-4 grid gap-4">
+                      <input
+                        type="text"
+                        placeholder="Resource title"
+                        value={resourceTitle}
+                        onChange={(event) => setResourceTitle(event.target.value)}
+                        disabled={uploadingResource}
+                        className="input-premium"
+                      />
+
+                      <div className="rounded-3xl border-2 border-dashed border-white/10 bg-slate-950/50 p-5 backdrop-blur transition hover:border-cyan-400/20 hover:bg-slate-950/70">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-100">
+                              Cloudinary upload
+                            </p>
+                            <p className="mt-1 text-sm text-slate-400">
+                              Choose a PDF, image, or thumbnail and we will auto-fill the resource URL.
+                            </p>
+                          </div>
+
+                          <label className="button-secondary cursor-pointer">
+                            Choose File
+                            <input
+                              type="file"
+                              accept=".pdf,image/*"
+                              onChange={handleChooseFile}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+
+                        <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+                          <div className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-3 text-sm text-slate-400">
+                            {uploadedFileName || "No file selected yet"}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleUploadSelectedFile}
+                            disabled={uploadingFile || !selectedUploadFile}
+                            className="button-primary"
+                          >
+                            {uploadingFile ? "Uploading..." : "Upload File"}
+                          </button>
+                        </div>
+
+                        {uploadSuccess ? (
+                          <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm font-medium text-emerald-300">
+                            Upload complete. The file URL is ready below.
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <input
+                        type="text"
+                        placeholder="Uploaded file URL will appear here"
+                        value={resourceFileUrl}
+                        onChange={(event) => setResourceFileUrl(event.target.value)}
+                        disabled={uploadingResource}
+                        className="input-premium"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={handleUploadResource}
+                        disabled={uploadingResource}
+                        className="button-primary"
+                      >
+                        {uploadingResource ? "Adding Resource..." : "Add Resource"}
+                      </button>
                     </div>
-                  ) : resources.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
-                      No resources available for this lecture yet.
-                    </div>
-                  ) : (
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {resources.map((resource) => (
-                        <div
-                          key={resource.id}
-                          className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
-                        >
+                  </div>
+                ) : null}
+
+                {loadingResources ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {Array.from({ length: 4 }).map((_, index) => (
+                      <div key={index} className="surface-soft p-5">
+                        <LoadingSkeleton className="h-12 w-12 rounded-2xl" />
+                        <LoadingSkeleton className="mt-4 h-5 w-3/4" />
+                        <LoadingSkeleton className="mt-3 h-4 w-full" />
+                        <LoadingSkeleton className="mt-6 h-10 w-36" />
+                      </div>
+                    ))}
+                  </div>
+                ) : resources.length === 0 ? (
+                  <EmptyState
+                    title="No resources for this lecture yet"
+                    description="Once supporting files are added, learners will be able to open and download them here."
+                  />
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {resources.map((resource, index) => (
+                      <motion.div
+                        key={resource.id}
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.04 }}
+                        className="surface-soft p-5"
+                      >
+                        <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-rose-500/10 text-sm font-semibold text-rose-300">
+                          PDF
+                        </div>
+                        <h3 className="mt-4 text-lg font-semibold text-slate-100">
+                          {resource.title}
+                        </h3>
+                        <p className="mt-2 text-sm text-slate-400">
+                          Resource for {selectedLecture.title}
+                        </p>
+
+                        <div className="mt-6 flex flex-wrap gap-3">
+                          <a
+                            href={resource.fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="button-primary"
+                          >
+                            Open PDF
+                          </a>
+                          <a
+                            href={resource.fileUrl}
+                            download
+                            className="button-secondary"
+                          >
+                            Download
+                          </a>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </motion.section>
+            ) : null}
+
+            {canViewLectures && selectedLecture ? (
+              <motion.section
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.1 }}
+                className="surface-card p-6"
+              >
+                <SectionHeader
+                  title="Discussion"
+                  description={`Questions and discussion for ${selectedLecture.title}.`}
+                />
+
+                {commentError ? (
+                  <div className="mb-5">
+                    <InlineError
+                      message={commentError}
+                      onRetry={() => fetchComments(selectedLecture.id)}
+                    />
+                  </div>
+                ) : null}
+
+                <div className="surface-soft p-5">
+                  <h3 className="text-lg font-semibold text-slate-100">
+                    Add Comment
+                  </h3>
+
+                  <div className="mt-4 space-y-4">
+                    <textarea
+                      placeholder="Share a thought, ask a question, or leave a note..."
+                      value={commentMessage}
+                      onChange={(event) => setCommentMessage(event.target.value)}
+                      rows="4"
+                      disabled={postingComment}
+                      className="input-premium"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={handleCreateComment}
+                      disabled={postingComment}
+                      className="button-primary"
+                    >
+                      {postingComment ? "Posting..." : "Post Comment"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  {loadingComments ? (
+                    <div className="space-y-4">
+                      {Array.from({ length: 3 }).map((_, index) => (
+                        <div key={index} className="surface-soft p-5">
                           <div className="flex items-start gap-4">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-100 text-xs font-bold text-rose-700">
-                              PDF
-                            </div>
-
-                            <div className="min-w-0 flex-1">
-                              <h3 className="truncate text-base font-semibold text-slate-900">
-                                {resource.title}
-                              </h3>
-
-                              <p className="mt-2 line-clamp-2 break-all text-sm text-slate-500">
-                                {resource.fileUrl}
-                              </p>
-
-                              <div className="mt-4 flex flex-wrap gap-3">
-                                <a
-                                  href={resource.fileUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-                                >
-                                  Open PDF
-                                </a>
-
-                                <a
-                                  href={resource.fileUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  download
-                                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-                                >
-                                  Download
-                                </a>
-                              </div>
+                            <LoadingSkeleton className="h-12 w-12 rounded-full" />
+                            <div className="flex-1">
+                              <LoadingSkeleton className="h-4 w-1/3" />
+                              <LoadingSkeleton className="mt-2 h-3 w-1/4" />
+                              <LoadingSkeleton className="mt-4 h-4 w-full" />
+                              <LoadingSkeleton className="mt-2 h-4 w-4/5" />
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-              )}
-
-              {studentUser && enrolled && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h2 className="text-xl font-semibold text-slate-900">
-                        Course Certificate
-                      </h2>
-
-                      <p className="mt-1 text-sm text-slate-500">
-                        Unlock your certificate after completing all course lectures.
-                      </p>
-                    </div>
-
-                    {certificate?.eligible && (
-                      <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                        Certificate Ready
-                      </span>
-                    )}
-                  </div>
-
-                  {loadingCertificate ? (
-                    <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
-                      Loading certificate...
-                    </div>
-                  ) : certificate?.eligible ? (
-                    <div className="space-y-5">
-                      <div className="overflow-hidden rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-cyan-50 p-8 shadow-sm">
-                        <div className="rounded-2xl border-4 border-slate-900 bg-white px-6 py-10 text-center">
-                          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-700">
-                            EduCore LMS
-                          </p>
-
-                          <h3 className="mt-5 text-3xl font-bold text-slate-900 sm:text-4xl">
-                            Certificate of Completion
-                          </h3>
-
-                          <p className="mt-6 text-sm uppercase tracking-[0.2em] text-slate-500">
-                            This certificate is proudly presented to
-                          </p>
-
-                          <p className="mt-5 text-3xl font-bold text-slate-900 sm:text-4xl">
-                            {certificate.studentName}
-                          </p>
-
-                          <p className="mt-6 text-sm uppercase tracking-[0.2em] text-slate-500">
-                            For successfully completing
-                          </p>
-
-                          <p className="mt-4 text-2xl font-semibold text-sky-700 sm:text-3xl">
-                            {certificate.courseTitle}
-                          </p>
-
-                          <div className="mt-10 grid gap-6 sm:grid-cols-2">
-                            <div className="rounded-2xl bg-slate-50 px-5 py-4">
-                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Completion Date
-                              </p>
-                              <p className="mt-2 text-sm font-semibold text-slate-900">
-                                {formatTimestamp(certificate.completionDate)}
-                              </p>
-                            </div>
-
-                            <div className="rounded-2xl bg-slate-50 px-5 py-4">
-                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Status
-                              </p>
-                              <p className="mt-2 text-sm font-semibold text-emerald-700">
-                                Course Completed
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handleDownloadCertificate}
-                        className="rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
-                      >
-                        Download Certificate
-                      </button>
-                    </div>
+                  ) : comments.length === 0 ? (
+                    <EmptyState
+                      title="No comments yet"
+                      description="Start the discussion for this lecture. Even one good question is enough to make the space feel alive."
+                    />
                   ) : (
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <h3 className="text-lg font-semibold text-slate-900">
-                            Certificate Locked
-                          </h3>
-                          <p className="mt-2 text-sm leading-6 text-slate-600">
-                            Complete all lectures to unlock your course certificate.
-                            You currently have {progress.progressPercentage}% progress.
-                          </p>
-                        </div>
+                    <div className="space-y-4">
+                      {comments.map((comment, index) => (
+                        <motion.div
+                          key={comment.id}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3, delay: index * 0.04 }}
+                          className="surface-soft p-5"
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-indigo-500/20 to-cyan-400/20 text-sm font-bold text-cyan-300">
+                              {getInitials(comment.userEmail)}
+                            </div>
 
-                        <div className="rounded-2xl bg-white px-5 py-4 text-center shadow-sm ring-1 ring-amber-200">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Progress
-                          </p>
-                          <p className="mt-2 text-2xl font-bold text-amber-600">
-                            {progress.progressPercentage}%
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {canViewLectures && selectedLecture && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h2 className="text-xl font-semibold text-slate-900">
-                        Discussion
-                      </h2>
-
-                      <p className="mt-1 text-sm text-slate-500">
-                        Questions and comments for: {selectedLecture.title}
-                      </p>
-                    </div>
-
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                      {comments.length} Comments
-                    </span>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                    <h3 className="text-lg font-semibold text-slate-900">
-                      Add Comment
-                    </h3>
-
-                    <div className="mt-4 space-y-4">
-                      <textarea
-                        placeholder="Share a thought, ask a question, or leave a note..."
-                        value={commentMessage}
-                        onChange={(e) => setCommentMessage(e.target.value)}
-                        rows="4"
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                      />
-
-                      <button
-                        type="button"
-                        onClick={handleCreateComment}
-                        disabled={postingComment}
-                        className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70"
-                      >
-                        {postingComment ? "Posting..." : "Post Comment"}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-6">
-                    {loadingComments ? (
-                      <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
-                        Loading discussion...
-                      </div>
-                    ) : comments.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
-                        No comments yet. Start the discussion.
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {comments.map((comment) => (
-                          <div
-                            key={comment.id}
-                            className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
-                          >
-                            <div className="flex items-start gap-4">
-                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sm font-bold text-sky-700">
-                                {getInitials(comment.userEmail)}
-                              </div>
-
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                                  <p className="truncate text-sm font-semibold text-slate-900">
-                                    {comment.userEmail}
-                                  </p>
-
-                                  <p className="text-xs text-slate-500">
-                                    {formatTimestamp(comment.createdAt)}
-                                  </p>
-                                </div>
-
-                                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                                  {comment.message}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="truncate text-sm font-semibold text-slate-100">
+                                  {comment.userEmail}
+                                </p>
+                                <p className="text-xs text-slate-400">
+                                  {formatTimestamp(comment.createdAt)}
                                 </p>
                               </div>
+                              <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-400">
+                                {comment.message}
+                              </p>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
+              </motion.section>
+            ) : null}
 
-              {canViewLectures && selectedLecture && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h2 className="text-xl font-semibold text-slate-900">
-                        Quiz + MCQ
-                      </h2>
+            {canViewLectures && selectedLecture ? (
+              <motion.section
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.12 }}
+                className="surface-card p-6"
+              >
+                <SectionHeader
+                  title="Quiz + MCQ"
+                  description={`Assessment for ${selectedLecture.title}.`}
+                  badge={quiz?.questions?.length ? `${quiz.questions.length} questions` : null}
+                />
 
-                      <p className="mt-1 text-sm text-slate-500">
-                        Quiz for lecture: {selectedLecture.title}
-                      </p>
-                    </div>
-
-                    {quiz?.questions?.length > 0 && (
-                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                        {quiz.questions.length} Questions
-                      </span>
-                    )}
+                {quizError ? (
+                  <div className="mb-5">
+                    <InlineError
+                      message={quizError}
+                      onRetry={() => fetchQuiz(selectedLecture.id)}
+                    />
                   </div>
+                ) : null}
 
-                  {loadingQuiz ? (
-                    <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
-                      Loading quiz...
-                    </div>
-                  ) : adminUser ? (
-                    <div className="space-y-6">
-                      {!quiz ? (
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                          <h3 className="text-lg font-semibold text-slate-900">
-                            Create Quiz
+                {loadingQuiz ? (
+                  <div className="space-y-4">
+                    <LoadingSkeleton className="h-28 w-full rounded-3xl" />
+                    <LoadingSkeleton className="h-48 w-full rounded-3xl" />
+                    <LoadingSkeleton className="h-48 w-full rounded-3xl" />
+                  </div>
+                ) : adminUser ? (
+                  <div className="space-y-6">
+                    {!quiz ? (
+                      <div className="surface-soft p-5">
+                        <h3 className="text-lg font-semibold text-slate-100">
+                          Create Quiz
+                        </h3>
+                        <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                          <input
+                            type="text"
+                            placeholder="Enter quiz title"
+                            value={quizTitle}
+                            onChange={(event) => setQuizTitle(event.target.value)}
+                            disabled={creatingQuiz}
+                            className="input-premium"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleCreateQuiz}
+                            disabled={creatingQuiz}
+                            className="button-primary"
+                          >
+                            {creatingQuiz ? "Creating..." : "Create Quiz"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="rounded-3xl border border-cyan-400/15 bg-gradient-to-br from-indigo-500/12 to-cyan-400/10 p-5">
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
+                            Active Quiz
+                          </p>
+                          <h3 className="mt-3 text-2xl font-semibold text-slate-100">
+                            {quiz.title}
+                          </h3>
+                        </div>
+
+                        <div className="surface-soft p-5">
+                          <h3 className="text-lg font-semibold text-slate-100">
+                            Add MCQ Question
                           </h3>
 
-                          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                            <input
-                              type="text"
-                              placeholder="Enter quiz title"
-                              value={quizTitle}
-                              onChange={(e) => setQuizTitle(e.target.value)}
-                              className="flex-1 rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                          <div className="mt-4 space-y-4">
+                            <textarea
+                              placeholder="Enter question"
+                              value={questionForm.question}
+                              onChange={(event) =>
+                                setQuestionForm({
+                                  ...questionForm,
+                                  question: event.target.value,
+                                })
+                              }
+                              rows="3"
+                              disabled={addingQuestion}
+                              className="input-premium"
                             />
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <input
+                                type="text"
+                                placeholder="Option A"
+                                value={questionForm.optionA}
+                                onChange={(event) =>
+                                  setQuestionForm({
+                                    ...questionForm,
+                                    optionA: event.target.value,
+                                  })
+                                }
+                                disabled={addingQuestion}
+                                className="input-premium"
+                              />
+                              <input
+                                type="text"
+                                placeholder="Option B"
+                                value={questionForm.optionB}
+                                onChange={(event) =>
+                                  setQuestionForm({
+                                    ...questionForm,
+                                    optionB: event.target.value,
+                                  })
+                                }
+                                disabled={addingQuestion}
+                                className="input-premium"
+                              />
+                              <input
+                                type="text"
+                                placeholder="Option C"
+                                value={questionForm.optionC}
+                                onChange={(event) =>
+                                  setQuestionForm({
+                                    ...questionForm,
+                                    optionC: event.target.value,
+                                  })
+                                }
+                                disabled={addingQuestion}
+                                className="input-premium"
+                              />
+                              <input
+                                type="text"
+                                placeholder="Option D"
+                                value={questionForm.optionD}
+                                onChange={(event) =>
+                                  setQuestionForm({
+                                    ...questionForm,
+                                    optionD: event.target.value,
+                                  })
+                                }
+                                disabled={addingQuestion}
+                                className="input-premium"
+                              />
+                            </div>
+
+                            <select
+                              value={questionForm.correctAnswer}
+                              onChange={(event) =>
+                                setQuestionForm({
+                                  ...questionForm,
+                                  correctAnswer: event.target.value,
+                                })
+                              }
+                              disabled={addingQuestion}
+                              className="input-premium"
+                            >
+                              <option value="A">Correct Answer: A</option>
+                              <option value="B">Correct Answer: B</option>
+                              <option value="C">Correct Answer: C</option>
+                              <option value="D">Correct Answer: D</option>
+                            </select>
 
                             <button
                               type="button"
-                              onClick={handleCreateQuiz}
-                              disabled={creatingQuiz}
-                              className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70"
+                              onClick={handleAddQuestion}
+                              disabled={addingQuestion}
+                              className="button-primary"
                             >
-                              {creatingQuiz ? "Creating..." : "Create Quiz"}
+                              {addingQuestion ? "Adding..." : "Add Question"}
                             </button>
                           </div>
                         </div>
-                      ) : (
-                        <>
-                          <div className="rounded-2xl border border-slate-200 bg-sky-50 p-5">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">
-                              Active Quiz
-                            </p>
 
-                            <h3 className="mt-2 text-xl font-semibold text-slate-900">
-                              {quiz.title}
-                            </h3>
-                          </div>
-
-                          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                            <h3 className="text-lg font-semibold text-slate-900">
-                              Add MCQ Question
-                            </h3>
-
-                            <div className="mt-4 space-y-4">
-                              <textarea
-                                placeholder="Enter question"
-                                value={questionForm.question}
-                                onChange={(e) =>
-                                  setQuestionForm({
-                                    ...questionForm,
-                                    question: e.target.value,
-                                  })
-                                }
-                                rows="3"
-                                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                              />
-
-                              <div className="grid gap-4 sm:grid-cols-2">
-                                <input
-                                  type="text"
-                                  placeholder="Option A"
-                                  value={questionForm.optionA}
-                                  onChange={(e) =>
-                                    setQuestionForm({
-                                      ...questionForm,
-                                      optionA: e.target.value,
-                                    })
-                                  }
-                                  className="rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                                />
-
-                                <input
-                                  type="text"
-                                  placeholder="Option B"
-                                  value={questionForm.optionB}
-                                  onChange={(e) =>
-                                    setQuestionForm({
-                                      ...questionForm,
-                                      optionB: e.target.value,
-                                    })
-                                  }
-                                  className="rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                                />
-
-                                <input
-                                  type="text"
-                                  placeholder="Option C"
-                                  value={questionForm.optionC}
-                                  onChange={(e) =>
-                                    setQuestionForm({
-                                      ...questionForm,
-                                      optionC: e.target.value,
-                                    })
-                                  }
-                                  className="rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                                />
-
-                                <input
-                                  type="text"
-                                  placeholder="Option D"
-                                  value={questionForm.optionD}
-                                  onChange={(e) =>
-                                    setQuestionForm({
-                                      ...questionForm,
-                                      optionD: e.target.value,
-                                    })
-                                  }
-                                  className="rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                                />
-                              </div>
-
-                              <select
-                                value={questionForm.correctAnswer}
-                                onChange={(e) =>
-                                  setQuestionForm({
-                                    ...questionForm,
-                                    correctAnswer: e.target.value,
-                                  })
-                                }
-                                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                              >
-                                <option value="A">Correct Answer: A</option>
-                                <option value="B">Correct Answer: B</option>
-                                <option value="C">Correct Answer: C</option>
-                                <option value="D">Correct Answer: D</option>
-                              </select>
-
-                              <button
-                                type="button"
-                                onClick={handleAddQuestion}
-                                disabled={addingQuestion}
-                                className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70"
-                              >
-                                {addingQuestion ? "Adding..." : "Add Question"}
-                              </button>
-                            </div>
-                          </div>
-
+                        {(quiz.questions || []).length === 0 ? (
+                          <EmptyState
+                            title="Quiz created"
+                            description="Add your first MCQ question to make this quiz ready for learners."
+                          />
+                        ) : (
                           <div className="space-y-4">
-                            {quiz.questions.length === 0 ? (
-                              <div className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
-                                Quiz created. Add your first MCQ question.
-                              </div>
-                            ) : (
-                              quiz.questions.map((questionItem, index) => (
-                                <div
-                                  key={questionItem.id}
-                                  className="rounded-2xl border border-slate-200 bg-white p-5"
-                                >
-                                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                    Question {index + 1}
-                                  </p>
-
-                                  <h4 className="mt-2 text-base font-semibold text-slate-900">
-                                    {questionItem.question}
-                                  </h4>
-
-                                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                    {[
-                                      { key: "A", label: questionItem.optionA },
-                                      { key: "B", label: questionItem.optionB },
-                                      { key: "C", label: questionItem.optionC },
-                                      { key: "D", label: questionItem.optionD },
-                                    ].map((option) => (
-                                      <div
-                                        key={option.key}
-                                        className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"
-                                      >
-                                        {option.key}. {option.label}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ) : quiz ? (
-                    <div className="space-y-6">
-                      <div className="rounded-2xl border border-slate-200 bg-sky-50 p-5">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">
-                          Lecture Quiz
-                        </p>
-
-                        <h3 className="mt-2 text-xl font-semibold text-slate-900">
-                          {quiz.title}
-                        </h3>
-                      </div>
-
-                      {quiz.questions.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
-                          Quiz exists, but no questions have been added yet.
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {quiz.questions.map((questionItem, index) => (
-                            <div
-                              key={questionItem.id}
-                              className="rounded-2xl border border-slate-200 bg-slate-50 p-5"
-                            >
-                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Question {index + 1}
-                              </p>
-
-                              <h4 className="mt-2 text-base font-semibold text-slate-900">
-                                {questionItem.question}
-                              </h4>
-
-                              <div className="mt-4 space-y-3">
-                                {[
-                                  { key: "A", label: questionItem.optionA },
-                                  { key: "B", label: questionItem.optionB },
-                                  { key: "C", label: questionItem.optionC },
-                                  { key: "D", label: questionItem.optionD },
-                                ].map((option) => {
-                                  const activeOption =
-                                    selectedAnswers[questionItem.id] === option.key;
-
-                                  return (
-                                    <button
+                            {quiz.questions.map((questionItem, index) => (
+                              <div key={questionItem.id} className="surface-soft p-5">
+                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                                  Question {index + 1}
+                                </p>
+                                <h4 className="mt-3 text-lg font-semibold text-slate-100">
+                                  {questionItem.question}
+                                </h4>
+                                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                  {[
+                                    { key: "A", label: questionItem.optionA },
+                                    { key: "B", label: questionItem.optionB },
+                                    { key: "C", label: questionItem.optionC },
+                                    { key: "D", label: questionItem.optionD },
+                                  ].map((option) => (
+                                    <div
                                       key={option.key}
-                                      type="button"
-                                      onClick={() =>
-                                        handleSelectAnswer(questionItem.id, option.key)
-                                      }
-                                      className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition ${
-                                        activeOption
-                                          ? "border-sky-500 bg-sky-50 text-sky-900"
-                                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                                      }`}
+                                      className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-300"
                                     >
                                       {option.key}. {option.label}
-                                    </button>
-                                  );
-                                })}
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ) : quiz ? (
+                  <div className="space-y-6">
+                    <div className="rounded-3xl border border-cyan-400/15 bg-gradient-to-br from-indigo-500/12 to-cyan-400/10 p-5">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
+                        Lecture Quiz
+                      </p>
+                      <h3 className="mt-3 text-2xl font-semibold text-slate-100">
+                        {quiz.title}
+                      </h3>
+                    </div>
 
-                      {quiz.questions.length > 0 && (
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                          <button
-                            type="button"
-                            onClick={handleSubmitQuiz}
-                            disabled={submittingQuiz}
-                            className="rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70"
+                    {(quiz.questions || []).length === 0 ? (
+                      <EmptyState
+                        title="Quiz exists, but no questions yet"
+                        description="The quiz shell is ready. Questions will appear here once they are added."
+                      />
+                    ) : (
+                      <div className="space-y-4">
+                        {quiz.questions.map((questionItem, index) => (
+                          <motion.div
+                            key={questionItem.id}
+                            initial={{ opacity: 0, y: 16 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: index * 0.04 }}
+                            className="surface-soft p-5"
                           >
-                            {submittingQuiz ? "Submitting..." : "Submit Quiz"}
-                          </button>
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                              Question {index + 1}
+                            </p>
+                            <h4 className="mt-3 text-lg font-semibold text-slate-100">
+                              {questionItem.question}
+                            </h4>
 
-                          {quizResult && (
-                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-800">
-                              <p className="font-semibold">
-                                Score: {quizResult.score}/{quizResult.totalQuestions}
-                              </p>
-                              <p className="mt-1">
-                                Percentage: {quizResult.percentage}%
-                              </p>
+                            <div className="mt-4 space-y-3">
+                              {[
+                                { key: "A", label: questionItem.optionA },
+                                { key: "B", label: questionItem.optionB },
+                                { key: "C", label: questionItem.optionC },
+                                { key: "D", label: questionItem.optionD },
+                              ].map((option) => {
+                                const activeOption =
+                                  selectedAnswers[questionItem.id] === option.key;
+
+                                return (
+                                  <button
+                                    key={option.key}
+                                    type="button"
+                                    onClick={() => handleSelectAnswer(questionItem.id, option.key)}
+                                    className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                                      activeOption
+                                        ? "border-cyan-400/30 bg-indigo-500/10 text-slate-100"
+                                        : "border-white/10 bg-slate-950/70 text-slate-300 hover:bg-slate-950"
+                                    }`}
+                                  >
+                                    {option.key}. {option.label}
+                                  </button>
+                                );
+                              })}
                             </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
-                      No quiz available for this lecture yet.
-                    </div>
-                  )}
-                </div>
-              )}
-            </section>
+                          </motion.div>
+                        ))}
+                      </div>
+                    )}
+
+                    {(quiz.questions || []).length > 0 ? (
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <button
+                          type="button"
+                          onClick={handleSubmitQuiz}
+                          disabled={submittingQuiz}
+                          className="button-primary"
+                        >
+                          {submittingQuiz ? "Submitting..." : "Submit Quiz"}
+                        </button>
+
+                        {quizResult ? (
+                          <div className="rounded-3xl border border-emerald-400/20 bg-emerald-400/10 px-5 py-4 text-sm text-emerald-200">
+                            <p className="font-semibold">
+                              Score: {quizResult.score}/{quizResult.totalQuestions}
+                            </p>
+                            <p className="mt-1">
+                              Percentage: {quizResult.percentage}%
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <EmptyState
+                    title="No quiz available yet"
+                    description="This lecture does not have a quiz yet. Once one exists, it will render here clearly for learners."
+                  />
+                )}
+              </motion.section>
+            ) : null}
           </div>
-        </section>
+
+          <div className="space-y-8">
+            <motion.section
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35 }}
+              className="surface-card p-6"
+            >
+              <SectionHeader
+                title="Course insights"
+                description="A quick high-signal view of access, lecture state, and completion."
+              />
+
+              <div className="grid gap-4">
+                <div className="surface-soft p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    Course ID
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-slate-100">
+                    {id}
+                  </p>
+                </div>
+
+                <div className="surface-soft p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    Access
+                  </p>
+                  <p className="mt-2 text-base font-semibold text-slate-100">
+                    {studentUser
+                      ? enrolled
+                        ? "Enrolled and active"
+                        : checkingEnrollment
+                          ? "Checking enrollment"
+                          : "Enrollment required"
+                      : adminUser
+                        ? "Admin access"
+                        : "Viewer access"}
+                  </p>
+                </div>
+
+                {selectedLecture && canViewLectures ? (
+                  <div className="surface-soft p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                      Current lecture
+                    </p>
+                    <p className="mt-2 text-base font-semibold text-slate-100">
+                      {selectedLecture.title}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </motion.section>
+
+            {studentUser && canViewLectures ? (
+              <motion.section
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: 0.04 }}
+                className="surface-card p-6"
+              >
+                <SectionHeader
+                  title="Progress"
+                  description="Completion builds lecture by lecture."
+                />
+
+                {progressError ? (
+                  <div className="mb-4">
+                    <InlineError
+                      message={progressError}
+                      onRetry={fetchCourseProgress}
+                    />
+                  </div>
+                ) : null}
+
+                <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-400/12 to-emerald-400/5 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-100">
+                        Course Progress
+                      </p>
+                      <p className="mt-2 text-sm text-slate-400">
+                        {progress.completedLectures} of {progress.totalLectures} lectures completed
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                      {progressPercentage}%
+                    </span>
+                  </div>
+
+                  <div className="mt-5 h-3 overflow-hidden rounded-full bg-slate-800">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${progress.progressPercentage || 0}%` }}
+                      transition={{ duration: 0.6 }}
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400"
+                    />
+                  </div>
+                </div>
+              </motion.section>
+            ) : null}
+
+            {adminUser ? (
+              <motion.section
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: 0.08 }}
+                className="surface-card p-6"
+              >
+                <SectionHeader
+                  title="Create Lecture"
+                  description="Add a new video lesson without leaving the course workspace."
+                />
+
+                <div className="space-y-4">
+                  <input
+                    type="text"
+                    placeholder="Lecture title"
+                    value={lectureTitle}
+                    onChange={(event) => setLectureTitle(event.target.value)}
+                    disabled={creatingLecture}
+                    className="input-premium"
+                  />
+
+                  <input
+                    type="text"
+                    placeholder="https://youtube.com/watch?v=..."
+                    value={videoUrl}
+                    onChange={(event) => setVideoUrl(event.target.value)}
+                    disabled={creatingLecture}
+                    className="input-premium"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={handleCreateLecture}
+                    disabled={creatingLecture}
+                    className="button-primary w-full"
+                  >
+                    {creatingLecture ? "Creating Lecture..." : "Create Lecture"}
+                  </button>
+                </div>
+              </motion.section>
+            ) : null}
+
+            {studentUser && canViewLectures ? (
+              <motion.section
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: 0.12 }}
+                className="surface-card p-6"
+              >
+                <SectionHeader
+                  title="Certificate"
+                  description="Complete the course to unlock your certificate."
+                />
+
+                {certificateError ? (
+                  <div className="mb-4">
+                    <InlineError
+                      message={certificateError}
+                      onRetry={fetchCertificate}
+                    />
+                  </div>
+                ) : null}
+
+                {loadingCertificate ? (
+                  <div className="surface-soft p-5">
+                    <LoadingSkeleton className="h-5 w-36" />
+                    <LoadingSkeleton className="mt-4 h-4 w-full" />
+                    <LoadingSkeleton className="mt-2 h-4 w-4/5" />
+                    <LoadingSkeleton className="mt-6 h-36 w-full rounded-3xl" />
+                  </div>
+                ) : certificate?.eligible ? (
+                  <div className="rounded-[28px] border border-cyan-400/15 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.2),_transparent_30%),linear-gradient(180deg,_rgba(30,41,59,0.98),_rgba(15,23,42,0.98))] p-6 shadow-premium">
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">
+                      EduCore LMS
+                    </p>
+                    <h3 className="mt-4 text-2xl font-semibold text-slate-100">
+                      Certificate of Completion
+                    </h3>
+                    <p className="mt-4 text-sm text-slate-400">
+                      Awarded to
+                    </p>
+                    <p className="mt-1 text-xl font-semibold text-slate-100">
+                      {certificate.studentName}
+                    </p>
+                    <p className="mt-4 text-sm text-slate-400">
+                      for successfully completing
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-cyan-300">
+                      {certificate.courseTitle}
+                    </p>
+                    <p className="mt-4 text-sm text-slate-400">
+                      Completion date: {formatTimestamp(certificate.completionDate)}
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={handleDownloadCertificate}
+                      className="button-primary mt-6 w-full"
+                    >
+                      Download Certificate
+                    </button>
+                  </div>
+                ) : (
+                  <div className="surface-soft p-5">
+                    <p className="text-base font-semibold text-slate-100">
+                      Certificate Locked
+                    </p>
+                    <p className="mt-3 text-sm leading-7 text-slate-400">
+                      Reach 100% course progress to unlock your printable course certificate.
+                    </p>
+                  </div>
+                )}
+              </motion.section>
+            ) : null}
+          </div>
+        </div>
       </main>
     </div>
   );

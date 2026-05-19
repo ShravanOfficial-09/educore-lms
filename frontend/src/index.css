@@ -1,3 +1,88 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply m-0 min-h-screen bg-slate-950 font-sans text-slate-100 antialiased;
+    background-image:
+      radial-gradient(circle at top left, rgba(99, 102, 241, 0.24), transparent 24%),
+      radial-gradient(circle at top right, rgba(34, 211, 238, 0.18), transparent 22%),
+      radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.12), transparent 20%),
+      linear-gradient(180deg, rgba(2, 6, 23, 1), rgba(15, 23, 42, 1));
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+
+  * {
+    @apply border-slate-800;
+  }
+
+  ::selection {
+    @apply bg-cyan-400/30 text-slate-100;
+  }
+}
+
+@layer components {
+  .app-shell {
+    @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .surface-card {
+    @apply rounded-3xl border border-white/10 bg-slate-900/80 shadow-2xl shadow-black/20 backdrop-blur-xl;
+  }
+
+  .surface-soft {
+    @apply rounded-3xl border border-white/10 bg-slate-900/55 backdrop-blur-xl;
+  }
+
+  .hero-gradient {
+    @apply bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.28),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(34,211,238,0.22),_transparent_26%),linear-gradient(135deg,_rgba(15,23,42,1),_rgba(30,41,59,0.96))];
+  }
+
+  .text-muted {
+    @apply text-slate-400;
+  }
+
+  .badge-premium {
+    @apply inline-flex items-center rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-300;
+  }
+
+  .button-primary {
+    @apply inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-400 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/20 transition duration-200 hover:-translate-y-0.5 hover:shadow-cyan-400/30 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .button-secondary {
+    @apply inline-flex items-center justify-center rounded-2xl border border-white/10 bg-slate-900/70 px-5 py-3 text-sm font-semibold text-slate-100 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-400/20 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .button-ghost {
+    @apply inline-flex items-center justify-center rounded-2xl border border-transparent px-4 py-2 text-sm font-medium text-slate-400 transition duration-200 hover:border-white/10 hover:bg-slate-900/70 hover:text-slate-100;
+  }
+
+  .input-premium {
+    @apply w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-400/40 focus:ring-4 focus:ring-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+}
+
+@layer utilities {
+  .shadow-premium {
+    box-shadow: 0 24px 90px -34px rgba(34, 211, 238, 0.28);
+  }
+
+  .scrollbar-soft::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .scrollbar-soft::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-soft::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.5);
+    border-radius: 9999px;
+  }
+}

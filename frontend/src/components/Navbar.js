@@ -1,43 +1,79 @@
+import { useState } from "react";
+import { motion } from "framer-motion";
+import toast from "react-hot-toast";
 import { Link, useNavigate } from "react-router-dom";
+import ConfirmModal from "./ConfirmModal";
 
 function Navbar() {
   const navigate = useNavigate();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      setLoggingOut(true);
+      localStorage.removeItem("token");
+      toast.success("You have been logged out.");
+      navigate("/login");
+    } finally {
+      setLoggingOut(false);
+      setShowLogoutModal(false);
+    }
   };
 
   return (
-    <header className="border-b border-slate-200 bg-white/90 backdrop-blur">
-      <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-        <Link to="/courses" className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-white">
-            LMS
-          </div>
-          <div>
-            <p className="text-lg font-semibold text-slate-900">EduCore LMS</p>
-            <p className="text-sm text-slate-500">Course Dashboard</p>
-          </div>
-        </Link>
+    <>
+      <motion.header
+        initial={{ y: -24, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.35 }}
+        className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/80 backdrop-blur-2xl"
+      >
+        <nav className="app-shell flex items-center justify-between py-4">
+          <Link to="/courses" className="group flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-400 text-sm font-bold text-white shadow-lg shadow-cyan-500/20 transition duration-200 group-hover:scale-105">
+              EC
+            </div>
 
-        <div className="flex items-center gap-3">
-          <Link
-            to="/courses"
-            className="rounded-md px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
-          >
-            Courses
+            <div>
+              <p className="text-lg font-semibold text-slate-100">
+                EduCore LMS
+              </p>
+              <p className="text-sm text-slate-400">
+                Modern learning workspace
+              </p>
+            </div>
           </Link>
 
-          <button
-            onClick={handleLogout}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
-          >
-            Logout
-          </button>
-        </div>
-      </nav>
-    </header>
+          <div className="flex items-center gap-3">
+            <Link
+              to="/courses"
+              className="button-ghost"
+            >
+              Dashboard
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => setShowLogoutModal(true)}
+              className="button-secondary"
+            >
+              Logout
+            </button>
+          </div>
+        </nav>
+      </motion.header>
+
+      <ConfirmModal
+        open={showLogoutModal}
+        title="Log out of EduCore?"
+        description="You will return to the login screen. Your course updates and progress stay safely saved."
+        confirmText="Log Out"
+        loading={loggingOut}
+        onCancel={() => setShowLogoutModal(false)}
+        onConfirm={handleLogout}
+      />
+    </>
   );
 }
 
