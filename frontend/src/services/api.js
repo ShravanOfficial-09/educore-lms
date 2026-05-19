@@ -133,3 +133,58 @@ export const getCourseProgress = async (courseId) => {
 
   return response.data;
 };
+
+// CREATE QUIZ API
+export const createQuiz = async (lectureId, quizData) => {
+
+  const response = await axios.post(
+    `${BASE_URL}/quizzes/create/${lectureId}`,
+    quizData,
+    {
+      headers: getAuthHeader(),
+    }
+  );
+
+  return response.data;
+};
+
+// ADD QUESTION API
+export const addQuestion = async (quizId, questionData) => {
+
+  const response = await axios.post(
+    `${BASE_URL}/quizzes/question/${quizId}`,
+    questionData,
+    {
+      headers: getAuthHeader(),
+    }
+  );
+
+  return response.data;
+};
+
+// GET QUIZ BY LECTURE API
+export const getQuizByLecture = async (lectureId) => {
+
+  const response = await axios.get(
+    `${BASE_URL}/quizzes/lecture/${lectureId}`,
+    {
+      headers: getAuthHeader(),
+    }
+  );
+
+  return response.data;
+};
+
+// SUBMIT QUIZ API
+export const submitQuiz = async (quizId, submissionData) => {
+
+  const response = await axios.post(
+    `${BASE_URL}/quizzes/submit/${quizId}`,
+    submissionData,
+    {
+      headers: getAuthHeader(),
+    }
+  );
+
+  return response.data;
+};

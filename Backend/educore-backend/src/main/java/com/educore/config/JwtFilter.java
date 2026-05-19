@@ -23,6 +23,7 @@ public class JwtFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(JwtFilter.class);
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final String ROLE_PREFIX = "ROLE_";
 
     private final JwtUtil jwtUtil;
 
@@ -33,11 +34,12 @@ public class JwtFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
-        log.info("JWT FILTER RUNNING");
+        log.debug("JWT filter processing request: {} {}", request.getMethod(), request.getRequestURI());
 
         String authorizationHeader = request.getHeader(AUTHORIZATION_HEADER);
 
         if (authorizationHeader == null || !authorizationHeader.startsWith(BEARER_PREFIX)) {
+            log.debug("No bearer token found for request: {}", request.getRequestURI());
             filterChain.doFilter(request, response);
             return;
         }
@@ -47,12 +49,14 @@ public class JwtFilter extends OncePerRequestFilter {
         try {
             String username = jwtUtil.extractUsername(token);
             String role = jwtUtil.extractRole(token);
+            String authority = normalizeAuthority(role);
 
-            log.info("JWT USER: {}", username);
-            log.info("JWT ROLE: {}", role);
+            log.debug("JWT user extracted: {}", username);
+            log.debug("JWT role extracted: {}", role);
+            log.debug("JWT authority normalized: {}", authority);
 
             if (username != null
-                    && role != null
+                    && authority != null
                     && SecurityContextHolder.getContext().getAuthentication() == null
                     && jwtUtil.validateToken(token)) {
 
@@ -60,7 +64,7 @@ public class JwtFilter extends OncePerRequestFilter {
                         new UsernamePasswordAuthenticationToken(
                                 username,
                                 null,
-                                List.of(new SimpleGrantedAuthority("ROLE_" + role))
+                                List.of(new SimpleGrantedAuthority(authority))
                         );
 
                 authentication.setDetails(
@@ -68,12 +72,40 @@ public class JwtFilter extends OncePerRequestFilter {
                 );
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                log.debug(
+                        "Authentication set for user '{}' with authorities {}",
+                        username,
+                        authentication.getAuthorities()
+                );
+            } else {
+                log.debug(
+                        "Authentication not set. username={}, authority={}, existingAuthPresent={}, tokenValid={}",
+                        username,
+                        authority,
+                        SecurityContextHolder.getContext().getAuthentication() != null,
+                        jwtUtil.validateToken(token)
+                );
             }
 
-        } catch (Exception e) {
+        } catch (Exception ex) {
+            log.warn("JWT authentication failed for request: {}", request.getRequestURI(), ex);
             SecurityContextHolder.clearContext();
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private String normalizeAuthority(String role) {
+        if (role == null || role.isBlank()) {
+            return null;
+        }
+
+        String normalizedRole = role.trim().toUpperCase();
+
+        if (normalizedRole.startsWith(ROLE_PREFIX)) {
+            return normalizedRole;
+        }
+
+        return ROLE_PREFIX + normalizedRole;
     }
 }
