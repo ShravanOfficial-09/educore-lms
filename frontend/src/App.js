@@ -5,9 +5,10 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import CourseDetails from "./pages/CourseDetails";
 import Courses from "./pages/Courses";
 import Login from "./pages/Login";
+import { getStoredToken } from "./utils/auth";
 
 function App() {
-  const token = localStorage.getItem("token");
+  const token = getStoredToken();
 
   useEffect(() => {
     document.documentElement.classList.add("dark");

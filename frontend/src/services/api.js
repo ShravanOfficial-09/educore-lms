@@ -1,11 +1,15 @@
 import axios from "axios";
+import { getStoredToken } from "../utils/auth";
 
 const BASE_URL = "http://localhost:8080/api";
 
 // GET JWT TOKEN
 const getAuthHeader = () => {
+  const token = getStoredToken();
 
-  const token = localStorage.getItem("token");
+  if (!token) {
+    return {};
+  }
 
   return {
     Authorization: `Bearer ${token}`,

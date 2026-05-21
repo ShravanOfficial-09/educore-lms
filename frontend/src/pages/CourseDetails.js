@@ -175,6 +175,7 @@ function CourseDetails() {
 
   const [lectures, setLectures] = useState([]);
   const [selectedLecture, setSelectedLecture] = useState(null);
+  const [showLectureSidebar, setShowLectureSidebar] = useState(false);
   const [lectureError, setLectureError] = useState("");
   const [loadingLectures, setLoadingLectures] = useState(false);
   const [creatingLecture, setCreatingLecture] = useState(false);
@@ -425,6 +426,10 @@ function CourseDetails() {
     fetchComments(selectedLecture?.id);
     fetchQuiz(selectedLecture?.id);
   }, [fetchComments, fetchQuiz, fetchResources, selectedLecture?.id]);
+
+  useEffect(() => {
+    setShowLectureSidebar(false);
+  }, [selectedLecture?.id]);
 
   const isLectureCompleted = (lectureId) => {
     return (progress.completedLectureIds || []).includes(lectureId);
@@ -819,16 +824,21 @@ function CourseDetails() {
     },
   ];
 
+  const handleSelectLecture = (lecture) => {
+    setSelectedLecture(lecture);
+    setShowLectureSidebar(false);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen overflow-x-hidden bg-slate-950">
       <Navbar />
 
-      <main className="app-shell py-8">
+      <main className="app-shell py-6 sm:py-8">
         <motion.div
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="mb-6 flex items-center justify-between gap-4"
+          className="mb-6 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center"
         >
           <button
             type="button"
@@ -845,15 +855,15 @@ function CourseDetails() {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45 }}
-          className="surface-card hero-gradient overflow-hidden p-8 md:p-10"
+          className="surface-card hero-gradient overflow-hidden p-6 sm:p-8 md:p-10"
         >
-          <div className="grid gap-8 xl:grid-cols-[1.2fr_0.8fr]">
+          <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr] xl:gap-8">
             <div>
               <span className="badge-premium">Course workspace</span>
-              <h1 className="mt-6 max-w-3xl text-4xl font-semibold tracking-tight text-slate-100 md:text-5xl">
+              <h1 className="mt-6 max-w-3xl text-balance text-3xl font-semibold tracking-tight text-slate-100 sm:text-4xl md:text-5xl">
                 A premium learning experience for lectures, resources, progress, and assessment.
               </h1>
-              <p className="mt-5 max-w-2xl text-base leading-7 text-slate-400">
+              <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-400 sm:text-base">
                 This workspace keeps teaching operations and learning flow in one place:
                 watch lectures, unlock materials, track completion, join discussion,
                 take quizzes, and finish with a certificate.
@@ -879,14 +889,14 @@ function CourseDetails() {
           </div>
         </motion.section>
 
-        <div className="mt-8 grid gap-8 xl:grid-cols-[1.75fr_0.85fr]">
+        <div className="mt-8 grid gap-6 xl:grid-cols-[1.75fr_0.85fr] xl:gap-8">
           <div className="space-y-8">
             {studentUser && !checkingEnrollment && !enrolled ? (
               <motion.section
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35 }}
-                className="surface-card p-8"
+                className="surface-card p-6 sm:p-8"
               >
                 <SectionHeader
                   title="Enrollment required"
@@ -907,7 +917,7 @@ function CourseDetails() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.05 }}
-              className="surface-card p-6"
+              className="surface-card p-5 sm:p-6"
             >
               <SectionHeader
                 title="Learning player"
@@ -949,59 +959,142 @@ function CourseDetails() {
                   description="Once lectures are added to this course, the learning player and the full student experience will appear here."
                 />
               ) : (
-                <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
-                  <aside className="surface-soft max-h-[780px] overflow-auto p-4 scrollbar-soft">
-                    <p className="px-2 text-sm font-semibold text-slate-100">
-                      Lecture navigation
-                    </p>
-                    <p className="px-2 pt-1 text-xs text-slate-400">
-                      The active lesson updates every connected learning module below.
-                    </p>
+                <>
+                  <div className="xl:hidden">
+                    <button
+                      type="button"
+                      onClick={() => setShowLectureSidebar(true)}
+                      className="button-secondary w-full justify-between"
+                    >
+                      <span>Browse Lectures</span>
+                      <span className="text-slate-400">{lectures.length}</span>
+                    </button>
+                  </div>
 
-                    <div className="mt-4 space-y-3">
-                      {lectures.map((lecture, index) => {
-                        const activeLecture = selectedLecture?.id === lecture.id;
-                        const completedLecture = isLectureCompleted(lecture.id);
-
-                        return (
-                          <motion.button
-                            key={lecture.id}
-                            type="button"
-                            whileHover={{ y: -2 }}
-                            onClick={() => setSelectedLecture(lecture)}
-                            className={`w-full rounded-3xl border p-4 text-left transition ${
-                              activeLecture
-                                ? "border-cyan-400/25 bg-indigo-500/10 shadow-lg"
-                                : "border-white/10 bg-slate-900/70 hover:border-cyan-400/15 hover:bg-slate-900"
-                            }`}
-                          >
-                            <div className="flex items-start gap-3">
-                              <span
-                                className={`mt-1 h-3 w-3 rounded-full ${
-                                  completedLecture ? "bg-emerald-400" : "bg-slate-700"
-                                }`}
-                              />
-
-                              <div className="min-w-0">
-                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                                  Lecture {index + 1}
-                                </p>
-                                <p className="mt-2 text-sm font-semibold text-slate-100">
-                                  {lecture.title}
-                                </p>
-                                <p className="mt-3 text-xs text-slate-400">
-                                  {completedLecture ? "Completed" : "Pending"}
-                                </p>
-                              </div>
+                  {showLectureSidebar ? (
+                    <div className="fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm xl:hidden">
+                      <div className="app-shell flex h-full items-end py-4 sm:items-center">
+                        <div className="surface-card flex max-h-[85vh] w-full flex-col overflow-hidden p-4 sm:p-5">
+                          <div className="mb-4 flex items-center justify-between gap-4">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-slate-100">
+                                Lecture navigation
+                              </p>
+                              <p className="mt-1 text-xs text-slate-400">
+                                Choose a lecture to update the player and learning tools.
+                              </p>
                             </div>
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-                  </aside>
 
-                  <div className="space-y-4">
-                    <div className="overflow-hidden rounded-[28px] border border-slate-900/70 bg-slate-950 shadow-premium">
+                            <button
+                              type="button"
+                              onClick={() => setShowLectureSidebar(false)}
+                              className="button-secondary !h-11 !w-11 !px-0 !py-0"
+                              aria-label="Close lecture navigation"
+                            >
+                              X
+                            </button>
+                          </div>
+
+                          <div className="scrollbar-soft flex-1 space-y-3 overflow-auto pr-1">
+                            {lectures.map((lecture, index) => {
+                              const activeLecture = selectedLecture?.id === lecture.id;
+                              const completedLecture = isLectureCompleted(lecture.id);
+
+                              return (
+                                <motion.button
+                                  key={lecture.id}
+                                  type="button"
+                                  whileHover={{ y: -2 }}
+                                  onClick={() => handleSelectLecture(lecture)}
+                                  className={`w-full rounded-3xl border p-4 text-left transition ${
+                                    activeLecture
+                                      ? "border-cyan-400/25 bg-indigo-500/10 shadow-lg"
+                                      : "border-white/10 bg-slate-900/70 hover:border-cyan-400/15 hover:bg-slate-900"
+                                  }`}
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <span
+                                      className={`mt-1 h-3 w-3 rounded-full ${
+                                        completedLecture ? "bg-emerald-400" : "bg-slate-700"
+                                      }`}
+                                    />
+
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                                        Lecture {index + 1}
+                                      </p>
+                                      <p className="mt-2 break-words text-sm font-semibold text-slate-100">
+                                        {lecture.title}
+                                      </p>
+                                      <p className="mt-3 text-xs text-slate-400">
+                                        {completedLecture ? "Completed" : "Pending"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </motion.button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="flex min-w-0 flex-col gap-5 xl:flex-row">
+                    <aside className="surface-soft hidden w-[300px] shrink-0 xl:block">
+                      <div className="scrollbar-soft max-h-[780px] overflow-auto p-4">
+                        <p className="px-2 text-sm font-semibold text-slate-100">
+                          Lecture navigation
+                        </p>
+                        <p className="px-2 pt-1 text-xs text-slate-400">
+                          The active lesson updates every connected learning module below.
+                        </p>
+
+                        <div className="mt-4 space-y-3">
+                          {lectures.map((lecture, index) => {
+                            const activeLecture = selectedLecture?.id === lecture.id;
+                            const completedLecture = isLectureCompleted(lecture.id);
+
+                            return (
+                              <motion.button
+                                key={lecture.id}
+                                type="button"
+                                whileHover={{ y: -2 }}
+                                onClick={() => handleSelectLecture(lecture)}
+                                className={`w-full rounded-3xl border p-4 text-left transition ${
+                                  activeLecture
+                                    ? "border-cyan-400/25 bg-indigo-500/10 shadow-lg"
+                                    : "border-white/10 bg-slate-900/70 hover:border-cyan-400/15 hover:bg-slate-900"
+                                }`}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <span
+                                    className={`mt-1 h-3 w-3 rounded-full ${
+                                      completedLecture ? "bg-emerald-400" : "bg-slate-700"
+                                    }`}
+                                  />
+
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                                      Lecture {index + 1}
+                                    </p>
+                                    <p className="mt-2 break-words text-sm font-semibold text-slate-100">
+                                      {lecture.title}
+                                    </p>
+                                    <p className="mt-3 text-xs text-slate-400">
+                                      {completedLecture ? "Completed" : "Pending"}
+                                    </p>
+                                  </div>
+                                </div>
+                              </motion.button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </aside>
+
+                    <div className="min-w-0 flex-1 space-y-4">
+                    <div className="overflow-hidden rounded-[24px] border border-slate-900/70 bg-slate-950 shadow-premium sm:rounded-[28px]">
                       {embeddedVideoUrl ? (
                         <div className="aspect-video w-full">
                           <iframe
@@ -1013,13 +1106,13 @@ function CourseDetails() {
                           />
                         </div>
                       ) : (
-                        <div className="flex aspect-video items-center justify-center px-6 text-center text-sm text-slate-300">
+                        <div className="flex aspect-video items-center justify-center px-4 text-center text-sm text-slate-300 sm:px-6">
                           This lecture does not have a supported YouTube embed link yet. You can still open the original video in a new tab.
                         </div>
                       )}
                     </div>
 
-                    <div className="surface-soft p-6">
+                    <div className="surface-soft p-5 sm:p-6">
                       <div className="flex flex-wrap items-center gap-3">
                         <span className="badge-premium">Now playing</span>
                         <span className="rounded-full border border-white/10 bg-slate-950/70 px-3 py-1 text-xs font-semibold text-slate-400">
@@ -1027,7 +1120,7 @@ function CourseDetails() {
                         </span>
                       </div>
 
-                      <h3 className="mt-5 text-3xl font-semibold text-slate-100">
+                      <h3 className="mt-5 break-words text-2xl font-semibold text-slate-100 sm:text-3xl">
                         {selectedLecture?.title}
                       </h3>
 
@@ -1035,7 +1128,7 @@ function CourseDetails() {
                         Stay in the flow from here: watch the lecture, open the support materials, join the discussion, complete the lesson, and move into the quiz when it is ready.
                       </p>
 
-                      <div className="mt-6 flex flex-wrap gap-3">
+                      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                         {studentUser && selectedLecture ? (
                           <button
                             type="button"
@@ -1043,7 +1136,7 @@ function CourseDetails() {
                             disabled={markingCompleted || isLectureCompleted(selectedLecture.id)}
                             className={
                               isLectureCompleted(selectedLecture.id)
-                                ? "inline-flex items-center justify-center rounded-2xl bg-emerald-400/10 px-5 py-3 text-sm font-semibold text-emerald-300"
+                                ? "inline-flex w-full items-center justify-center rounded-2xl bg-emerald-400/10 px-5 py-3 text-sm font-semibold text-emerald-300 sm:w-auto"
                                 : "button-primary"
                             }
                           >
@@ -1060,15 +1153,16 @@ function CourseDetails() {
                             href={selectedLecture.videoUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="button-secondary"
+                            className="button-secondary w-full sm:w-auto"
                           >
                             Open Video in New Tab
                           </a>
                         ) : null}
                       </div>
                     </div>
+                    </div>
                   </div>
-                </div>
+                </>
               )}
             </motion.section>
 
@@ -1077,7 +1171,7 @@ function CourseDetails() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.08 }}
-                className="surface-card p-6"
+                className="surface-card p-5 sm:p-6"
               >
                 <SectionHeader
                   title="Resources"
@@ -1094,7 +1188,7 @@ function CourseDetails() {
                 ) : null}
 
                 {adminUser ? (
-                  <div className="mb-6 surface-soft p-5">
+                  <div className="mb-6 surface-soft p-4 sm:p-5">
                     <h3 className="text-lg font-semibold text-slate-100">
                       Upload lecture resource
                     </h3>
@@ -1109,7 +1203,7 @@ function CourseDetails() {
                         className="input-premium"
                       />
 
-                      <div className="rounded-3xl border-2 border-dashed border-white/10 bg-slate-950/50 p-5 backdrop-blur transition hover:border-cyan-400/20 hover:bg-slate-950/70">
+                      <div className="rounded-3xl border-2 border-dashed border-white/10 bg-slate-950/50 p-4 backdrop-blur transition hover:border-cyan-400/20 hover:bg-slate-950/70 sm:p-5">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                           <div>
                             <p className="text-sm font-semibold text-slate-100">
@@ -1120,7 +1214,7 @@ function CourseDetails() {
                             </p>
                           </div>
 
-                          <label className="button-secondary cursor-pointer">
+                          <label className="button-secondary w-full cursor-pointer sm:w-auto">
                             Choose File
                             <input
                               type="file"
@@ -1140,7 +1234,7 @@ function CourseDetails() {
                             type="button"
                             onClick={handleUploadSelectedFile}
                             disabled={uploadingFile || !selectedUploadFile}
-                            className="button-primary"
+                            className="button-primary w-full sm:w-auto"
                           >
                             {uploadingFile ? "Uploading..." : "Upload File"}
                           </button>
@@ -1166,7 +1260,7 @@ function CourseDetails() {
                         type="button"
                         onClick={handleUploadResource}
                         disabled={uploadingResource}
-                        className="button-primary"
+                        className="button-primary w-full sm:w-auto"
                       >
                         {uploadingResource ? "Adding Resource..." : "Add Resource"}
                       </button>
@@ -1175,7 +1269,7 @@ function CourseDetails() {
                 ) : null}
 
                 {loadingResources ? (
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     {Array.from({ length: 4 }).map((_, index) => (
                       <div key={index} className="surface-soft p-5">
                         <LoadingSkeleton className="h-12 w-12 rounded-2xl" />
@@ -1191,7 +1285,7 @@ function CourseDetails() {
                     description="Once supporting files are added, learners will be able to open and download them here."
                   />
                 ) : (
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     {resources.map((resource, index) => (
                       <motion.div
                         key={resource.id}
@@ -1239,7 +1333,7 @@ function CourseDetails() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.1 }}
-                className="surface-card p-6"
+                className="surface-card p-5 sm:p-6"
               >
                 <SectionHeader
                   title="Discussion"
@@ -1255,7 +1349,7 @@ function CourseDetails() {
                   </div>
                 ) : null}
 
-                <div className="surface-soft p-5">
+                <div className="surface-soft p-4 sm:p-5">
                   <h3 className="text-lg font-semibold text-slate-100">
                     Add Comment
                   </h3>
@@ -1274,7 +1368,7 @@ function CourseDetails() {
                       type="button"
                       onClick={handleCreateComment}
                       disabled={postingComment}
-                      className="button-primary"
+                      className="button-primary w-full sm:w-auto"
                     >
                       {postingComment ? "Posting..." : "Post Comment"}
                     </button>
@@ -1345,7 +1439,7 @@ function CourseDetails() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.12 }}
-                className="surface-card p-6"
+                className="surface-card p-5 sm:p-6"
               >
                 <SectionHeader
                   title="Quiz + MCQ"
@@ -1371,7 +1465,7 @@ function CourseDetails() {
                 ) : adminUser ? (
                   <div className="space-y-6">
                     {!quiz ? (
-                      <div className="surface-soft p-5">
+                      <div className="surface-soft p-4 sm:p-5">
                         <h3 className="text-lg font-semibold text-slate-100">
                           Create Quiz
                         </h3>
@@ -1388,7 +1482,7 @@ function CourseDetails() {
                             type="button"
                             onClick={handleCreateQuiz}
                             disabled={creatingQuiz}
-                            className="button-primary"
+                            className="button-primary w-full sm:w-auto"
                           >
                             {creatingQuiz ? "Creating..." : "Create Quiz"}
                           </button>
@@ -1405,7 +1499,7 @@ function CourseDetails() {
                           </h3>
                         </div>
 
-                        <div className="surface-soft p-5">
+                        <div className="surface-soft p-4 sm:p-5">
                           <h3 className="text-lg font-semibold text-slate-100">
                             Add MCQ Question
                           </h3>
@@ -1501,7 +1595,7 @@ function CourseDetails() {
                               type="button"
                               onClick={handleAddQuestion}
                               disabled={addingQuestion}
-                              className="button-primary"
+                              className="button-primary w-full sm:w-auto"
                             >
                               {addingQuestion ? "Adding..." : "Add Question"}
                             </button>
@@ -1615,7 +1709,7 @@ function CourseDetails() {
                           type="button"
                           onClick={handleSubmitQuiz}
                           disabled={submittingQuiz}
-                          className="button-primary"
+                          className="button-primary w-full sm:w-auto"
                         >
                           {submittingQuiz ? "Submitting..." : "Submit Quiz"}
                         </button>
@@ -1648,7 +1742,7 @@ function CourseDetails() {
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35 }}
-              className="surface-card p-6"
+              className="surface-card p-5 sm:p-6"
             >
               <SectionHeader
                 title="Course insights"
@@ -1700,7 +1794,7 @@ function CourseDetails() {
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35, delay: 0.04 }}
-                className="surface-card p-6"
+              className="surface-card p-5 sm:p-6"
               >
                 <SectionHeader
                   title="Progress"
@@ -1748,7 +1842,7 @@ function CourseDetails() {
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35, delay: 0.08 }}
-                className="surface-card p-6"
+              className="surface-card p-5 sm:p-6"
               >
                 <SectionHeader
                   title="Create Lecture"
@@ -1815,23 +1909,23 @@ function CourseDetails() {
                     <LoadingSkeleton className="mt-6 h-36 w-full rounded-3xl" />
                   </div>
                 ) : certificate?.eligible ? (
-                  <div className="rounded-[28px] border border-cyan-400/15 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.2),_transparent_30%),linear-gradient(180deg,_rgba(30,41,59,0.98),_rgba(15,23,42,0.98))] p-6 shadow-premium">
+                  <div className="rounded-[24px] border border-cyan-400/15 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.2),_transparent_30%),linear-gradient(180deg,_rgba(30,41,59,0.98),_rgba(15,23,42,0.98))] p-5 shadow-premium sm:rounded-[28px] sm:p-6">
                     <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">
                       EduCore LMS
                     </p>
-                    <h3 className="mt-4 text-2xl font-semibold text-slate-100">
+                    <h3 className="mt-4 text-xl font-semibold text-slate-100 sm:text-2xl">
                       Certificate of Completion
                     </h3>
                     <p className="mt-4 text-sm text-slate-400">
                       Awarded to
                     </p>
-                    <p className="mt-1 text-xl font-semibold text-slate-100">
+                    <p className="mt-1 break-words text-lg font-semibold text-slate-100 sm:text-xl">
                       {certificate.studentName}
                     </p>
                     <p className="mt-4 text-sm text-slate-400">
                       for successfully completing
                     </p>
-                    <p className="mt-1 text-lg font-semibold text-cyan-300">
+                    <p className="mt-1 break-words text-base font-semibold text-cyan-300 sm:text-lg">
                       {certificate.courseTitle}
                     </p>
                     <p className="mt-4 text-sm text-slate-400">

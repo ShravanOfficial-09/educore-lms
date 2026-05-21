@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { loginUser } from "../services/api";
+import { storeAuthToken } from "../utils/auth";
 
 const getErrorMessage = (error, fallbackMessage) => {
   return error?.response?.data?.message || fallbackMessage;
@@ -36,7 +37,7 @@ function Login() {
 
       const response = await loginUser(email, password);
 
-      localStorage.setItem("token", response.data.token);
+      storeAuthToken(response);
 
       toast.success("Welcome back. Login successful.");
       navigate("/courses");
@@ -54,7 +55,7 @@ function Login() {
     <div className="relative min-h-screen overflow-hidden bg-slate-950">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.28),_transparent_25%),radial-gradient(circle_at_top_right,_rgba(34,211,238,0.2),_transparent_22%),radial-gradient(circle_at_bottom_right,_rgba(168,85,247,0.12),_transparent_20%)]" />
 
-      <div className="app-shell relative flex min-h-screen flex-col py-6">
+      <div className="app-shell relative flex min-h-screen flex-col py-6 sm:py-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-400 text-sm font-bold text-white shadow-lg shadow-cyan-500/20">
@@ -71,7 +72,7 @@ function Login() {
           </div>
         </div>
 
-        <div className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="grid flex-1 items-center gap-8 py-10 sm:py-12 lg:grid-cols-[1.15fr_0.85fr] lg:gap-10">
           <motion.section
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -79,7 +80,7 @@ function Login() {
             className="hidden lg:block"
           >
             <span className="badge-premium">Premium SaaS workspace</span>
-            <h1 className="mt-8 max-w-3xl text-5xl font-semibold leading-tight text-slate-100 xl:text-6xl">
+            <h1 className="mt-8 max-w-3xl text-4xl font-semibold leading-tight text-slate-100 xl:text-6xl">
               The calm command center for courses, teaching, progress, and learner momentum.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-400">
@@ -111,7 +112,7 @@ function Login() {
             initial={{ opacity: 0, x: 22 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.45, delay: 0.08 }}
-            className="surface-card w-full max-w-xl justify-self-center p-8 sm:p-10"
+            className="surface-card w-full max-w-xl justify-self-center p-6 sm:p-8 lg:p-10"
           >
             <div className="flex items-center gap-3 lg:hidden">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-400 text-sm font-bold text-white">
@@ -130,7 +131,7 @@ function Login() {
             <span className="mt-4 inline-flex rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300">
               Welcome back
             </span>
-            <h2 className="mt-5 text-3xl font-semibold text-slate-100">
+            <h2 className="mt-5 text-2xl font-semibold text-slate-100 sm:text-3xl">
               Sign in to your workspace
             </h2>
             <p className="mt-3 text-sm leading-6 text-slate-400">
@@ -181,7 +182,7 @@ function Login() {
               </button>
             </form>
 
-            <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-400">
+            <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm leading-6 text-slate-400">
               Role-aware controls stay automatic, so admins, instructors, and learners all land in the right experience.
             </div>
           </motion.section>

@@ -37,6 +37,7 @@ public class JwtFilter extends OncePerRequestFilter {
         log.debug("JWT filter processing request: {} {}", request.getMethod(), request.getRequestURI());
 
         String authorizationHeader = request.getHeader(AUTHORIZATION_HEADER);
+        log.debug("Incoming Authorization header: {}", maskAuthorizationHeader(authorizationHeader));
 
         if (authorizationHeader == null || !authorizationHeader.startsWith(BEARER_PREFIX)) {
             log.debug("No bearer token found for request: {}", request.getRequestURI());
@@ -45,20 +46,23 @@ public class JwtFilter extends OncePerRequestFilter {
         }
 
         String token = authorizationHeader.substring(BEARER_PREFIX.length()).trim();
+        log.debug("Extracted bearer token preview: {}", maskToken(token));
 
         try {
             String username = jwtUtil.extractUsername(token);
             String role = jwtUtil.extractRole(token);
             String authority = normalizeAuthority(role);
+            boolean tokenValid = jwtUtil.validateToken(token);
 
             log.debug("JWT user extracted: {}", username);
             log.debug("JWT role extracted: {}", role);
             log.debug("JWT authority normalized: {}", authority);
+            log.debug("JWT token validation result: {}", tokenValid);
 
             if (username != null
                     && authority != null
                     && SecurityContextHolder.getContext().getAuthentication() == null
-                    && jwtUtil.validateToken(token)) {
+                    && tokenValid) {
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
@@ -83,7 +87,7 @@ public class JwtFilter extends OncePerRequestFilter {
                         username,
                         authority,
                         SecurityContextHolder.getContext().getAuthentication() != null,
-                        jwtUtil.validateToken(token)
+                        tokenValid
                 );
             }
 
@@ -107,5 +111,30 @@ public class JwtFilter extends OncePerRequestFilter {
         }
 
         return ROLE_PREFIX + normalizedRole;
+    }
+
+    private String maskAuthorizationHeader(String authorizationHeader) {
+        if (authorizationHeader == null || authorizationHeader.isBlank()) {
+            return "<missing>";
+        }
+
+        if (!authorizationHeader.startsWith(BEARER_PREFIX)) {
+            return "<non-bearer-header>";
+        }
+
+        String token = authorizationHeader.substring(BEARER_PREFIX.length()).trim();
+        return BEARER_PREFIX + maskToken(token);
+    }
+
+    private String maskToken(String token) {
+        if (token == null || token.isBlank()) {
+            return "<empty>";
+        }
+
+        if (token.length() <= 16) {
+            return token;
+        }
+
+        return token.substring(0, 8) + "..." + token.substring(token.length() - 8);
     }
 }

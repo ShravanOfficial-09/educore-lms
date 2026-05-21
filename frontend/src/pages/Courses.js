@@ -111,18 +111,18 @@ function Courses() {
           transition={{ duration: 0.4 }}
           className={`grid gap-6 ${adminUser ? "xl:grid-cols-[1.25fr_0.75fr]" : ""}`}
         >
-          <div className="surface-card hero-gradient overflow-hidden p-8">
+          <div className="surface-card hero-gradient overflow-hidden p-6 sm:p-8">
             <span className="badge-premium">Dashboard</span>
-            <h1 className="mt-6 max-w-3xl text-4xl font-semibold tracking-tight text-slate-100 md:text-5xl">
+            <h1 className="mt-6 max-w-3xl text-3xl font-semibold tracking-tight text-slate-100 sm:text-4xl md:text-5xl">
               A polished control tower for every course, learner path, and teaching workflow.
             </h1>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-400">
+            <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-400 sm:text-base">
               Move through the LMS the way modern SaaS products do: strong visual
               hierarchy, quick scanning, live course state, and clean transitions
               from catalog to classroom.
             </p>
 
-            <div className="mt-8 grid gap-4 md:grid-cols-3">
+            <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {dashboardStats(courses.length, adminUser).map((item, index) => (
                 <motion.div
                   key={item.label}
@@ -131,7 +131,7 @@ function Courses() {
                   transition={{ duration: 0.35, delay: 0.08 * index }}
                   className={`rounded-3xl border border-white/10 bg-gradient-to-br ${item.tone} p-5 backdrop-blur`}
                 >
-                  <p className="text-3xl font-semibold text-slate-100">
+                  <p className="text-2xl font-semibold text-slate-100 sm:text-3xl">
                     {item.value}
                   </p>
                   <p className="mt-2 text-sm text-slate-400">
@@ -147,7 +147,7 @@ function Courses() {
               initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.4, delay: 0.08 }}
-              className="surface-card p-6"
+              className="surface-card p-5 sm:p-6"
             >
               <h2 className="text-2xl font-semibold text-slate-100">
                 Create Course
@@ -216,12 +216,12 @@ function Courses() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.05 }}
-          className="surface-card p-6"
+          className="surface-card p-5 sm:p-6"
         >
           <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <span className="badge-premium">Catalog</span>
-              <h2 className="mt-4 text-3xl font-semibold text-slate-100">
+              <h2 className="mt-4 text-2xl font-semibold text-slate-100 sm:text-3xl">
                 Course library
               </h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">
@@ -246,7 +246,7 @@ function Courses() {
           ) : null}
 
           {loadingCourses ? (
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {Array.from({ length: 6 }).map((_, index) => (
                 <CourseCardSkeleton key={index} />
               ))}
@@ -264,7 +264,7 @@ function Courses() {
               </p>
             </div>
           ) : (
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {courses.map((course, index) => (
                 <motion.button
                   key={course.id}
@@ -273,12 +273,12 @@ function Courses() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35, delay: index * 0.04 }}
                   onClick={() => navigate(`/courses/${course.id}`)}
-                  className="group surface-card flex h-full flex-col p-6 text-left transition hover:-translate-y-1.5 hover:border-cyan-400/20 hover:shadow-premium"
+                  className="group surface-card flex h-full min-h-[280px] flex-col p-5 text-left transition hover:-translate-y-1.5 hover:border-cyan-400/20 hover:shadow-premium sm:p-6"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <span className="badge-premium">Course</span>
-                      <h3 className="mt-4 text-2xl font-semibold text-slate-100">
+                      <h3 className="mt-4 text-xl font-semibold text-slate-100 sm:text-2xl">
                         {course.title}
                       </h3>
                     </div>

@@ -8,14 +8,18 @@ import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Date;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
 public class JwtUtil {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtUtil.class);
 
     private final Key signingKey;
     private final long jwtExpirationMs;
@@ -56,6 +60,7 @@ public class JwtUtil {
             Claims claims = extractAllClaims(token);
             return claims.getExpiration().after(new Date());
         } catch (JwtException | IllegalArgumentException ex) {
+            log.debug("JWT validation failed: {}", ex.getMessage());
             return false;
         }
     }
